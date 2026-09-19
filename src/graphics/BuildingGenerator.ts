@@ -9,7 +9,6 @@ import { GAME_CONFIG } from '../config/gameConfig';
 export class BuildingGenerator {
   private wallMaterials: THREE.MeshLambertMaterial[];
   private roofFloorMaterial: THREE.MeshLambertMaterial;
-  private windowMat: THREE.MeshLambertMaterial;
   private signboardSystem: PhysicalSignboardSystem;
 
   constructor() {
@@ -17,7 +16,6 @@ export class BuildingGenerator {
       new THREE.MeshLambertMaterial({ color })
     );
     this.roofFloorMaterial = new THREE.MeshLambertMaterial({ color: GAME_CONFIG.palette.buildingRoof });
-    this.windowMat = new THREE.MeshLambertMaterial({ color: GAME_CONFIG.palette.windowBlue, emissive: 0x112233 });
     this.signboardSystem = new PhysicalSignboardSystem();
   }
 
@@ -135,13 +133,11 @@ export class BuildingGenerator {
     const pts = insetCoords.map((p) => new THREE.Vector2(p.x - rawCenterX, -(p.z - rawCenterZ)));
 
     const shape = new THREE.Shape(pts);
+    // Lightweight, clean flat extrude without heavy bevel segments for high FPS
     const extrudeSettings = {
       depth: height,
-      bevelEnabled: true,
-      bevelSegments: 2,
+      bevelEnabled: false,
       steps: 1,
-      bevelSize: 0.15,
-      bevelThickness: 0.15,
     };
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     geometry.rotateX(-Math.PI / 2);
@@ -177,35 +173,13 @@ export class BuildingGenerator {
     roofGeo.rotateX(-Math.PI / 2);
 
     const roofCapMesh = new THREE.Mesh(roofGeo, this.roofFloorMaterial);
-    roofCapMesh.position.y = height + 0.15; // Adjusted for bevel
+    roofCapMesh.position.y = height + 0.02;
     building.add(roofCapMesh);
 
     const lod1Roof = new THREE.Mesh(roofGeo, this.roofFloorMaterial);
-    lod1Roof.position.y = height + 0.15; // Adjusted for bevel
+    lod1Roof.position.y = height + 0.02;
     lod1Group.add(lod1Roof);
 
-    // 1. Regular Windows on building facade walls (LOD 2 only)
-    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-    for (let i = 0; i < insetCoords.length; i++) {
-      const p1 = insetCoords[i];
-      const p2 = insetCoords[(i + 1) % insetCoords.length];
-      const dx = p2.x - p1.x;
-      const dz = p2.z - p1.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist > 4) {
-        const numWindows = Math.floor(dist / 3);
-        for (let w = 1; w <= numWindows; w++) {
-          const wx = p1.x + dx * (w / (numWindows + 1)) - rawCenterX;
-          const wz = p1.z + dz * (w / (numWindows + 1)) - rawCenterZ;
-
-          const win = new THREE.Mesh(boxGeo, this.windowMat);
-          win.scale.set(1.2, 1.2, 0.2);
-          win.position.set(wx, 1.5, wz);
-          win.rotation.y = Math.atan2(-dz, dx);
-          building.add(win);
-        }
-      }
-    }
 
     // 2. Identify the Front Facade Edge facing towards the nearest road
     let bestDist = Infinity;

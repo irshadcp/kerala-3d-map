@@ -428,11 +428,11 @@ export const GAME_CONFIG = {
   minPitch: 0,
   maxPitch: 84,
 
-  // TPP Camera Configuration (GTA-style over-the-shoulder close street view)
-  tppZoom: 21.8,
-  tppPitch: 78,
-  tppLookAhead: 3.6,
-  tppShoulderOffset: 0.38,
+  // TPP Camera Configuration (GTA-style over-the-shoulder view balanced for scaled character)
+  tppZoom: 21.3,
+  tppPitch: 75,
+  tppLookAhead: 4.6,
+  tppShoulderOffset: 0.48,
 
   // Vehicle Camera Configuration (Auto-Rickshaw)
   vehicleZoom: 20.9,
@@ -450,7 +450,7 @@ export const GAME_CONFIG = {
   turnSpeed: 14.0, // radians / second
 
   // Character dimensions
-  characterScale: 1.0, // base scale relative to real-world meters
+  characterScale: 1.85, // scaled up for prominent game presence across vast Kerala maps
 
   // Visual Palette matching Snapchat 3D Map (Bright, high-key, cheery pastel)
   palette: {

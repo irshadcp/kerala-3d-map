@@ -140,11 +140,11 @@ export class CharacterModel {
     this.bodyContainer.add(this.rightLeg);
 
     // 5. Soft Ground Shadow Decal (Stays on ground during jump)
-    const shadowGeo = new THREE.CircleGeometry(0.55, 16);
+    const shadowGeo = new THREE.CircleGeometry(0.95, 16);
     const shadowMat = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.25,
       depthWrite: false,
     });
     this.shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
@@ -152,8 +152,8 @@ export class CharacterModel {
     this.shadowMesh.position.y = 0.03;
     this.group.add(this.shadowMesh);
 
-    // Base scale calibrated to realistic human height (~1.80m tall)
-    this.group.scale.set(1.0, 1.0, 1.0);
+    // Prominent, heroic character scale (1.85x) for great visibility across vast city maps
+    this.group.scale.set(1.85, 1.85, 1.85);
   }
 
   /**
