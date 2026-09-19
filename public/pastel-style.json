@@ -5368,9 +5368,9 @@
       "type": "fill-extrusion",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 16.0,
+      "minzoom": 14.0,
       "layout": {
-        "visibility": "none"
+        "visibility": "visible"
       },
       "filter": [
         "all",

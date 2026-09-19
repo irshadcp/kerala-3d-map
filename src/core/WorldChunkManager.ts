@@ -46,7 +46,7 @@ export class WorldChunkManager {
   private static readonly MAX_CACHE_SIZE = 64;
 
   private readonly chunkSize = 200;
-  private readonly stationaryRadius = 3; // 7x7 grid = 1.4 km x 1.4 km when stopped / slow
+  private readonly stationaryRadius = 2; // 5x5 grid = 1.0 km x 1.0 km around player, distant skyline handled by MapLibre 3D
 
   private terrainEngine: TerrainEngine;
   private realBuildingManager: RealBuildingManager;

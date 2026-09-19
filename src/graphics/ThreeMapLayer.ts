@@ -211,9 +211,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       }
     });
 
-    // 5. Hide MapLibre's uncleaned raw vector extrusion layer
+    // 5. Keep MapLibre's vector 3D building extrusion layer visible for distant skyline!
     if (map.getLayer('3d-buildings')) {
-      map.setLayoutProperty('3d-buildings', 'visibility', 'none');
+      map.setLayoutProperty('3d-buildings', 'visibility', 'visible');
     }
 
     // 6. Compute origin Mercator coordinate transform

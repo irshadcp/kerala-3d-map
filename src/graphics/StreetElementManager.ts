@@ -20,8 +20,8 @@ export class StreetElementManager {
   private roadGraph?: RoadGraph;
   private realBuildingManager?: RealBuildingManager;
 
-  // Maximum active street furniture elements
-  private readonly MAX_ELEMENTS = 140;
+  // Maximum active street furniture elements (focused close to player for high performance)
+  private readonly MAX_ELEMENTS = 70;
 
   constructor(originLat: number, originLng: number) {
     this.originLat = originLat;
@@ -124,7 +124,7 @@ export class StreetElementManager {
         const [lng, lat] = feat.geometry.coordinates;
         const { x, z } = GeoCoords.toLocalMeters(lat, lng, this.originLat, this.originLng);
         const distSq = (x - cam.x) ** 2 + (z - cam.z) ** 2;
-        if (distSq > 550 * 550) continue;
+        if (distSq > 180 * 180) continue;
 
         const props = feat.properties || {};
         const isBus =
@@ -155,7 +155,7 @@ export class StreetElementManager {
       if (!roadFeatures || roadFeatures.length === 0) return;
 
       let addedCount = 0;
-      const maxAdd = 35;
+      const maxAdd = 20;
 
       for (const feat of roadFeatures) {
         if (addedCount >= maxAdd) break;
@@ -186,7 +186,7 @@ export class StreetElementManager {
             const midX = (p1.x + p2.x) / 2;
             const midZ = (p1.z + p2.z) / 2;
             const distSq = (midX - cam.x) ** 2 + (midZ - cam.z) ** 2;
-            if (distSq > 550 * 550) continue;
+            if (distSq > 180 * 180) continue;
 
             // Skip entire segment if midpoint is over water (bridge segments — no street furniture)
             if (this.waterSystem && this.waterSystem.isPointInWater(midX, midZ, 0.5)) continue;

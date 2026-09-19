@@ -475,15 +475,15 @@ export class BuildingGenerator {
 
     lod.position.set(centerX, 0, centerZ);
 
-    // LOD distances scale with importance so landmarks stay detailed from farther away
-    // importanceLevel: 0=bg, 1=house, 2=road-facing, 3=commercial, 4=POI, 5=landmark
+    // LOD distances: only nearby buildings get heavy storefronts & signs;
+    // distant buildings transition rapidly to clean, lightweight solid 3D boxes
     const lodDistances: Record<number, [number, number, number]> = {
-      5: [0, 300, 700],   // landmark
-      4: [0, 200, 500],   // major POI
-      3: [0, 120, 350],   // commercial / named
-      2: [0, 80, 250],    // road-facing
-      1: [0, 60, 200],    // residential
-      0: [0, 35, 120],    // background
+      5: [0, 180, 500],   // landmark
+      4: [0, 120, 350],   // major POI
+      3: [0, 80, 220],    // commercial / named
+      2: [0, 60, 160],    // road-facing
+      1: [0, 45, 120],    // residential
+      0: [0, 25, 80],     // background
     };
     const [d0, d1, d2] = lodDistances[importanceLevel] ?? lodDistances[1];
 
