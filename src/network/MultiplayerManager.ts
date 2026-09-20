@@ -1,3 +1,4 @@
+import { joinRoom, Room, selfId } from '@trystero-p2p/mqtt';
 import { RemotePlayerData } from '../graphics/RemotePlayerManager';
 
 export interface LocalUserProfile {
@@ -6,53 +7,25 @@ export interface LocalUserProfile {
   district: string;
 }
 
-export type NetworkMessage =
-  | {
-      type: 'join';
-      player: RemotePlayerData;
-    }
-  | {
-      type: 'heartbeat';
-      player: RemotePlayerData;
-    }
-  | {
-      type: 'transform';
-      id: string;
-      lat: number;
-      lng: number;
-      heading: number;
-      isWalking: boolean;
-    }
-  | {
-      type: 'state';
-      id: string;
-      isMuted?: boolean;
-      isSpeaking?: boolean;
-    }
-  | {
-      type: 'leave';
-      id: string;
-    }
-  | {
-      type: 'signal';
-      from: string;
-      to: string;
-      signal: any;
-    };
-
 /**
  * MultiplayerManager
- * Handles real-time multiplayer synchronization and WebRTC proximity voice chat.
- * 100% ephemeral: zero persistent database storage, auto-cleans on exit.
- * Uses BroadcastChannel for instant local testing + WebSocket network relay for cross-device multiplayer.
+ * 100% Free & Serverless cross-device Real-Time Multiplayer + WebRTC Proximity Voice Chat.
+ * Uses @trystero-p2p/mqtt over public redundant MQTT brokers (HiveMQ, EMQX, Mosquitto)
+ * to connect mobile phones, laptops, and tablets anywhere in the world.
+ * Zero database storage, zero API keys, 100% ephemeral and zero cost.
  */
 export class MultiplayerManager {
   private profile: LocalUserProfile;
+  private room: Room;
   private broadcastChannel: BroadcastChannel | null = null;
-  private ws: WebSocket | null = null;
   private isDestroyed = false;
 
-  // Local movement state
+  // Trystero action transmitters
+  private sendTransform: (data: any, targetPeerId?: string) => void;
+  private sendProfile: (data: any, targetPeerId?: string) => void;
+  private sendState: (data: any, targetPeerId?: string) => void;
+
+  // Local state
   public localLat = 0;
   public localLng = 0;
   public localHeading = 0;
@@ -66,9 +39,6 @@ export class MultiplayerManager {
   private analyser: AnalyserNode | null = null;
   private micCheckInterval: number | null = null;
 
-  // WebRTC Peer Connections for Voice: peerId -> RTCPeerConnection
-  private peerConnections = new Map<string, RTCPeerConnection>();
-
   // Active Remote Players: peerId -> RemotePlayerData
   public remotePlayers = new Map<string, RemotePlayerData>();
 
@@ -80,162 +50,175 @@ export class MultiplayerManager {
   public onMuteStateChange?: (muted: boolean) => void;
 
   private heartbeatTimer: number | null = null;
-  private pruneTimer: number | null = null;
 
   constructor(profile: LocalUserProfile, initialLat: number, initialLng: number) {
     this.profile = profile;
     this.localLat = initialLat;
     this.localLng = initialLng;
 
-    this.initTransport();
-    this.startHeartbeat();
+    // 1. Initialize Trystero P2P MQTT Room (connects cross-device across the internet)
+    const APP_ID = 'kerala-3d-map-realtime-2026';
+    const ROOM_NAME = 'kerala-global-room';
+
+    this.room = joinRoom({ appId: APP_ID }, ROOM_NAME);
+
+    // Setup action channels
+    const transformAction = this.room.makeAction<any>('transform');
+    const profileAction = this.room.makeAction<any>('profile');
+    const stateAction = this.room.makeAction<any>('state');
+
+    this.sendTransform = (data: any, targetPeerId?: string) => {
+      try {
+        transformAction.send(data, targetPeerId ? { target: targetPeerId } : undefined);
+      } catch (_) {}
+    };
+    this.sendProfile = (data: any, targetPeerId?: string) => {
+      try {
+        profileAction.send(data, targetPeerId ? { target: targetPeerId } : undefined);
+      } catch (_) {}
+    };
+    this.sendState = (data: any, targetPeerId?: string) => {
+      try {
+        stateAction.send(data, targetPeerId ? { target: targetPeerId } : undefined);
+      } catch (_) {}
+    };
+
+    // When a peer connects across the internet
+    this.room.onPeerJoin = (peerId: string) => {
+      this.broadcastSelfProfile(peerId);
+      // Staggered follow-up broadcast to guarantee arrival after WebRTC data channel handshakes
+      setTimeout(() => {
+        if (!this.isDestroyed) {
+          this.broadcastSelfProfile(peerId);
+        }
+      }, 500);
+
+      if (this.localStream) {
+        this.room.addStream(this.localStream, { target: peerId });
+      }
+      this.notifyCountChange();
+    };
+
+    // When a peer disconnects
+    this.room.onPeerLeave = (peerId: string) => {
+      this.removeRemotePeer(peerId);
+    };
+
+    // Handle incoming peer profiles
+    profileAction.onMessage = (data: any, context) => {
+      const peerId = context.peerId;
+      if (peerId === selfId || peerId === this.profile.id) return;
+
+      const isNew = !this.remotePlayers.has(peerId);
+      const player: RemotePlayerData = {
+        id: peerId,
+        name: data.name || 'Explorer',
+        district: data.district || 'Kerala',
+        lat: typeof data.lat === 'number' ? data.lat : this.localLat,
+        lng: typeof data.lng === 'number' ? data.lng : this.localLng,
+        heading: data.heading || 0,
+        isWalking: Boolean(data.isWalking),
+        isMuted: Boolean(data.isMuted),
+        isSpeaking: Boolean(data.isSpeaking),
+      };
+
+      this.remotePlayers.set(peerId, player);
+
+      if (this.onPlayerUpdate) {
+        this.onPlayerUpdate(player);
+      }
+
+      if (isNew) {
+        this.notifyCountChange();
+        // Reply with our profile so the other peer also has our info
+        this.broadcastSelfProfile(peerId);
+      }
+    };
+
+    // Handle incoming coordinate / movement updates
+    transformAction.onMessage = (data: any, context) => {
+      const peerId = context.peerId;
+      const player = this.remotePlayers.get(peerId);
+      if (player) {
+        player.lat = data.lat;
+        player.lng = data.lng;
+        player.heading = data.heading;
+        player.isWalking = data.isWalking;
+
+        if (this.onPlayerUpdate) {
+          this.onPlayerUpdate(player);
+        }
+      }
+    };
+
+    // Handle incoming state updates (mute / speaking)
+    stateAction.onMessage = (data: any, context) => {
+      const peerId = context.peerId;
+      const player = this.remotePlayers.get(peerId);
+      if (player) {
+        if (data.isMuted !== undefined) player.isMuted = data.isMuted;
+        if (data.isSpeaking !== undefined) player.isSpeaking = data.isSpeaking;
+
+        if (this.onPlayerUpdate) {
+          this.onPlayerUpdate(player);
+        }
+      }
+    };
+
+    // Handle incoming WebRTC audio stream for Proximity Voice Chat
+    this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (this.onRemoteStream) {
+        this.onRemoteStream(peerId, stream, this.audioContext);
+      }
+    };
+
+    // 2. Initialize local BroadcastChannel (for instant multi-tab sync on same machine)
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        this.broadcastChannel = new BroadcastChannel('kerala-3d-local-bc');
+        this.broadcastChannel.onmessage = (event) => {
+          this.handleLocalBcMessage(event.data);
+        };
+      }
+    } catch (_) {}
+
+    // Heartbeat every 2.0s to ensure all connected peers have latest coordinates
+    this.heartbeatTimer = window.setInterval(() => {
+      this.broadcastSelfProfile();
+      this.notifyCountChange();
+    }, 2000);
+
     this.initExitHandlers();
   }
 
-  private initTransport() {
-    // 1. Local BroadcastChannel for zero-latency multi-tab sync on same machine
-    try {
-      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-        this.broadcastChannel = new BroadcastChannel('kerala-3d-map-channel');
-        this.broadcastChannel.onmessage = (event) => {
-          this.handleIncomingMessage(event.data);
-        };
-      }
-    } catch (err) {
-      console.warn('[Multiplayer] BroadcastChannel unavailable:', err);
-    }
-
-    // 2. Public WebSocket relay for cross-device / mobile multiplayer
-    this.connectNetworkRelay();
-  }
-
-  private connectNetworkRelay() {
-    // Connect to public WebSocket echo/relay broker
-    const relayUrls = [
-      'wss://socketsbay.com/wss/v2/1/kerala-3d-map/',
-      'wss://echo.websocket.events',
-    ];
+  private broadcastSelfProfile(targetPeerId?: string) {
+    const data = {
+      peerId: selfId,
+      name: this.profile.name,
+      district: this.profile.district,
+      lat: this.localLat,
+      lng: this.localLng,
+      heading: this.localHeading,
+      isWalking: this.localIsWalking,
+      isMuted: this.isMuted,
+      isSpeaking: this.isSpeaking,
+    };
 
     try {
-      const url = relayUrls[0];
-      const socket = new WebSocket(url);
-      this.ws = socket;
+      this.sendProfile(data, targetPeerId);
+    } catch (_) {}
 
-      socket.onopen = () => {
-        // Announce join
-        this.broadcastJoin();
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          this.handleIncomingMessage(msg);
-        } catch (_) {}
-      };
-
-      socket.onerror = () => {
-        // Fallback or retry silently
-      };
-
-      socket.onclose = () => {
-        if (!this.isDestroyed) {
-          setTimeout(() => this.connectNetworkRelay(), 6000);
-        }
-      };
-    } catch (_) {
-      // Local BroadcastChannel continues functioning smoothly
-    }
-  }
-
-  private send(msg: NetworkMessage) {
-    if (this.isDestroyed) return;
-
-    // Send to local BroadcastChannel
     if (this.broadcastChannel) {
       try {
-        this.broadcastChannel.postMessage(msg);
+        this.broadcastChannel.postMessage({
+          type: 'profile',
+          peerId: selfId,
+          data,
+        });
       } catch (_) {}
-    }
-
-    // Send to Network WebSocket
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(JSON.stringify(msg));
-      } catch (_) {}
-    }
-  }
-
-  private handleIncomingMessage(msg: NetworkMessage) {
-    if (!msg || !('type' in msg)) return;
-
-    // Ignore messages from self
-    if ('id' in msg && msg.id === this.profile.id) return;
-    if ('player' in msg && msg.player.id === this.profile.id) return;
-
-    switch (msg.type) {
-      case 'join':
-      case 'heartbeat': {
-        const p = msg.player;
-        const isNew = !this.remotePlayers.has(p.id);
-        this.remotePlayers.set(p.id, p);
-
-        if (this.onPlayerUpdate) {
-          this.onPlayerUpdate(p);
-        }
-
-        if (isNew) {
-          this.notifyCountChange();
-          // If this was a new player's join, respond with our presence so they know we exist!
-          if (msg.type === 'join') {
-            this.broadcastHeartbeat();
-          }
-          // If we have microphone active, initiate WebRTC connection for voice
-          if (this.localStream) {
-            this.initiatePeerCall(p.id);
-          }
-        }
-        break;
-      }
-
-      case 'transform': {
-        const existing = this.remotePlayers.get(msg.id);
-        if (existing) {
-          existing.lat = msg.lat;
-          existing.lng = msg.lng;
-          existing.heading = msg.heading;
-          existing.isWalking = msg.isWalking;
-
-          if (this.onPlayerUpdate) {
-            this.onPlayerUpdate(existing);
-          }
-        }
-        break;
-      }
-
-      case 'state': {
-        const existing = this.remotePlayers.get(msg.id);
-        if (existing) {
-          if (msg.isMuted !== undefined) existing.isMuted = msg.isMuted;
-          if (msg.isSpeaking !== undefined) existing.isSpeaking = msg.isSpeaking;
-
-          if (this.onPlayerUpdate) {
-            this.onPlayerUpdate(existing);
-          }
-        }
-        break;
-      }
-
-      case 'leave': {
-        this.removeRemotePeer(msg.id);
-        break;
-      }
-
-      case 'signal': {
-        if (msg.to === this.profile.id) {
-          this.handleSignalMessage(msg.from, msg.signal);
-        }
-        break;
-      }
     }
   }
 
@@ -250,83 +233,71 @@ export class MultiplayerManager {
     this.localHeading = heading;
     this.localIsWalking = isWalking;
 
-    this.send({
-      type: 'transform',
-      id: this.profile.id,
-      lat,
-      lng,
-      heading,
-      isWalking,
-    });
+    const data = { lat, lng, heading, isWalking };
+
+    try {
+      this.sendTransform(data);
+    } catch (_) {}
+
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'transform',
+          peerId: selfId,
+          data,
+        });
+      } catch (_) {}
+    }
   }
 
-  public broadcastJoin() {
-    this.send({
-      type: 'join',
-      player: {
-        id: this.profile.id,
-        name: this.profile.name,
-        district: this.profile.district,
-        lat: this.localLat,
-        lng: this.localLng,
-        heading: this.localHeading,
-        isWalking: this.localIsWalking,
-        isMuted: this.isMuted,
-        isSpeaking: this.isSpeaking,
-      },
-    });
-  }
+  private handleLocalBcMessage(msg: any) {
+    if (!msg || msg.peerId === selfId || msg.peerId === this.profile.id) return;
 
-  private broadcastHeartbeat() {
-    this.send({
-      type: 'heartbeat',
-      player: {
-        id: this.profile.id,
-        name: this.profile.name,
-        district: this.profile.district,
-        lat: this.localLat,
-        lng: this.localLng,
-        heading: this.localHeading,
-        isWalking: this.localIsWalking,
-        isMuted: this.isMuted,
-        isSpeaking: this.isSpeaking,
-      },
-    });
-  }
-
-  private startHeartbeat() {
-    this.broadcastJoin();
-
-    this.heartbeatTimer = window.setInterval(() => {
-      this.broadcastHeartbeat();
-    }, 2000);
-
-    // Prune stale peers every 2.5s
-    this.pruneTimer = window.setInterval(() => {
-      this.notifyCountChange();
-    }, 2500);
+    if (msg.type === 'profile') {
+      const isNew = !this.remotePlayers.has(msg.peerId);
+      const player: RemotePlayerData = {
+        id: msg.peerId,
+        name: msg.data.name || 'Explorer',
+        district: msg.data.district || 'Kerala',
+        lat: msg.data.lat,
+        lng: msg.data.lng,
+        heading: msg.data.heading,
+        isWalking: msg.data.isWalking,
+        isMuted: msg.data.isMuted,
+        isSpeaking: msg.data.isSpeaking,
+      };
+      this.remotePlayers.set(msg.peerId, player);
+      if (this.onPlayerUpdate) this.onPlayerUpdate(player);
+      if (isNew) this.notifyCountChange();
+    } else if (msg.type === 'transform') {
+      const p = this.remotePlayers.get(msg.peerId);
+      if (p) {
+        p.lat = msg.data.lat;
+        p.lng = msg.data.lng;
+        p.heading = msg.data.heading;
+        p.isWalking = msg.data.isWalking;
+        if (this.onPlayerUpdate) this.onPlayerUpdate(p);
+      }
+    } else if (msg.type === 'leave') {
+      this.removeRemotePeer(msg.peerId);
+    }
   }
 
   private notifyCountChange() {
     if (this.onPlayerCountChange) {
-      // Total count includes local player + remote players
-      this.onPlayerCountChange(this.remotePlayers.size + 1);
+      const peers = this.room ? Object.keys(this.room.getPeers()).length : 0;
+      const count = Math.max(this.remotePlayers.size, peers) + 1;
+      this.onPlayerCountChange(count);
     }
   }
 
-  private removeRemotePeer(id: string) {
-    if (this.remotePlayers.has(id)) {
-      this.remotePlayers.delete(id);
+  private removeRemotePeer(peerId: string) {
+    if (this.remotePlayers.has(peerId)) {
+      this.remotePlayers.delete(peerId);
       if (this.onPlayerRemove) {
-        this.onPlayerRemove(id);
+        this.onPlayerRemove(peerId);
       }
       this.notifyCountChange();
-    }
-
-    const pc = this.peerConnections.get(id);
-    if (pc) {
-      pc.close();
-      this.peerConnections.delete(id);
     }
   }
 
@@ -348,9 +319,11 @@ export class MultiplayerManager {
       });
 
       this.localStream = stream;
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
 
-      // Audio level analyser for speaking visual feedback
+      // Voice level detection
       const source = this.audioContext.createMediaStreamSource(stream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
@@ -358,14 +331,12 @@ export class MultiplayerManager {
 
       this.startVoiceLevelDetection();
 
-      // Connect WebRTC audio to all active peers
-      for (const peerId of this.remotePlayers.keys()) {
-        this.initiatePeerCall(peerId);
-      }
+      // Send local microphone audio stream to all peers in the room
+      this.room.addStream(stream);
 
       return true;
     } catch (err) {
-      console.warn('[Multiplayer] Microphone access denied or not available:', err);
+      console.warn('[Multiplayer] Microphone access error:', err);
       return false;
     }
   }
@@ -379,11 +350,9 @@ export class MultiplayerManager {
       });
     }
 
-    this.send({
-      type: 'state',
-      id: this.profile.id,
-      isMuted: this.isMuted,
-    });
+    try {
+      this.sendState({ isMuted: this.isMuted });
+    } catch (_) {}
 
     if (this.onMuteStateChange) {
       this.onMuteStateChange(this.isMuted);
@@ -405,7 +374,9 @@ export class MultiplayerManager {
       if (!this.analyser || this.isMuted) {
         if (this.isSpeaking) {
           this.isSpeaking = false;
-          this.broadcastSpeakingState(false);
+          try {
+            this.sendState({ isSpeaking: false });
+          } catch (_) {}
         }
         return;
       }
@@ -420,113 +391,15 @@ export class MultiplayerManager {
 
       if (speaking !== this.isSpeaking) {
         this.isSpeaking = speaking;
-        this.broadcastSpeakingState(speaking);
+        try {
+          this.sendState({ isSpeaking: speaking });
+        } catch (_) {}
       }
     }, 150);
   }
 
-  private broadcastSpeakingState(speaking: boolean) {
-    this.send({
-      type: 'state',
-      id: this.profile.id,
-      isSpeaking: speaking,
-    });
-  }
-
-  private async createPeerConnection(peerId: string): Promise<RTCPeerConnection> {
-    const existing = this.peerConnections.get(peerId);
-    if (existing) return existing;
-
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-    });
-
-    // Send local audio tracks to peer
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
-      });
-    }
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.send({
-          type: 'signal',
-          from: this.profile.id,
-          to: peerId,
-          signal: { type: 'candidate', candidate: event.candidate },
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      if (event.streams && event.streams[0] && this.audioContext) {
-        if (this.onRemoteStream) {
-          this.onRemoteStream(peerId, event.streams[0], this.audioContext);
-        }
-      }
-    };
-
-    this.peerConnections.set(peerId, pc);
-    return pc;
-  }
-
-  private async initiatePeerCall(peerId: string) {
-    try {
-      // Deterministic peer caller (peer with smaller id makes the offer)
-      if (this.profile.id > peerId) return;
-
-      const pc = await this.createPeerConnection(peerId);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      this.send({
-        type: 'signal',
-        from: this.profile.id,
-        to: peerId,
-        signal: { type: 'offer', sdp: offer },
-      });
-    } catch (err) {
-      console.warn('[Multiplayer] Error creating WebRTC offer:', err);
-    }
-  }
-
-  private async handleSignalMessage(fromPeerId: string, signal: any) {
-    try {
-      if (signal.type === 'offer') {
-        const pc = await this.createPeerConnection(fromPeerId);
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-
-        this.send({
-          type: 'signal',
-          from: this.profile.id,
-          to: fromPeerId,
-          signal: { type: 'answer', sdp: answer },
-        });
-      } else if (signal.type === 'answer') {
-        const pc = this.peerConnections.get(fromPeerId);
-        if (pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-        }
-      } else if (signal.type === 'candidate') {
-        const pc = this.peerConnections.get(fromPeerId);
-        if (pc && signal.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-        }
-      }
-    } catch (err) {
-      console.warn('[Multiplayer] Error handling WebRTC signal:', err);
-    }
-  }
-
   // =========================================================================
-  // Ephemeral Exit & Cleanup
+  // Exit Handlers & Clean Shutdown
   // =========================================================================
 
   private initExitHandlers() {
@@ -544,16 +417,17 @@ export class MultiplayerManager {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
-    // Broadcast immediate leave packet
-    try {
-      this.send({
-        type: 'leave',
-        id: this.profile.id,
-      });
-    } catch (_) {}
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'leave',
+          peerId: selfId,
+        });
+        this.broadcastChannel.close();
+      } catch (_) {}
+    }
 
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    if (this.pruneTimer) clearInterval(this.pruneTimer);
     if (this.micCheckInterval) clearInterval(this.micCheckInterval);
 
     if (this.localStream) {
@@ -566,19 +440,10 @@ export class MultiplayerManager {
       this.audioContext = null;
     }
 
-    for (const pc of this.peerConnections.values()) {
-      pc.close();
-    }
-    this.peerConnections.clear();
+    try {
+      this.room.leave();
+    } catch (_) {}
 
-    if (this.broadcastChannel) {
-      this.broadcastChannel.close();
-      this.broadcastChannel = null;
-    }
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    this.remotePlayers.clear();
   }
 }

@@ -193,8 +193,8 @@ export class RemotePlayerManager {
     const toRemove: string[] = [];
 
     for (const [id, player] of this.players) {
-      // Ephemeral pruning: If remote player hasn't broadcast in 4.5 seconds, remove immediately!
-      if (now - player.lastSeen > 4500) {
+      // Ephemeral pruning fallback: If remote player hasn't broadcast in 12 seconds, prune cleanly
+      if (now - player.lastSeen > 12000) {
         toRemove.push(id);
         continue;
       }
