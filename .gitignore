@@ -39,3 +39,6 @@ pnpm-debug.log*
 
 # Vercel
 .vercel
+
+# Scratch scripts
+scratch/

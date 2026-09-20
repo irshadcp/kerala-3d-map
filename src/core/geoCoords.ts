@@ -19,6 +19,13 @@ export class GeoCoords {
   }
 
   /**
+   * Meters per pixel at a given latitude and zoom level (Web Mercator projection).
+   */
+  static metersPerPixel(lat: number, zoom: number): number {
+    return (156543.03392 * Math.cos(lat * DEG_TO_RAD)) / Math.pow(2, zoom);
+  }
+
+  /**
    * Meters per degree of longitude at a given latitude.
    */
   static metersPerLngDegree(lat: number): number {

@@ -1,227 +1,125 @@
 import * as THREE from 'three';
-import { GAME_CONFIG } from '../config/gameConfig';
 
-export class TreeGenerator {
-  private trunkMat: THREE.MeshLambertMaterial;
-  private foliageMats: THREE.MeshLambertMaterial[];
-  private tuftMat: THREE.MeshLambertMaterial;
-  private bushMat: THREE.MeshLambertMaterial;
+// Simple seeded random generator
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
 
-  // Shared static unit geometries across ALL trees to prevent GPU memory leaks
-  private static sharedTrunkGeo: THREE.CylinderGeometry;
-  private static sharedFoliageGeo: THREE.SphereGeometry;
-  private static sharedTuftGeo: THREE.ConeGeometry;
-  private static sharedShadowGeo: THREE.CircleGeometry;
-  private static sharedShadowMat: THREE.MeshBasicMaterial;
+export class SnapTreeGenerator {
+  static generateTreesForChunk(
+    chunkX: number,
+    chunkZ: number,
+    chunkSize: number,
+    _scene: THREE.Scene
+  ): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `chunk_${chunkX}_${chunkZ}`;
 
-  constructor() {
-    this.trunkMat = new THREE.MeshLambertMaterial({ color: GAME_CONFIG.palette.treeTrunk });
-    this.foliageMats = GAME_CONFIG.palette.treeGreen.map(c => new THREE.MeshLambertMaterial({ color: c }));
-    this.tuftMat = new THREE.MeshLambertMaterial({ color: GAME_CONFIG.palette.treeGreen[1] });
-    this.bushMat = new THREE.MeshLambertMaterial({ color: GAME_CONFIG.palette.treeGreen[2] });
-    TreeGenerator.initSharedResources();
-  }
+    // 8-15 trees per 150m chunk
+    const treeCount = Math.floor(8 + seededRandom(chunkX * 123 + chunkZ * 456) * 8);
 
-  private static initSharedResources() {
-    if (TreeGenerator.sharedTrunkGeo) return;
-    TreeGenerator.sharedTrunkGeo = new THREE.CylinderGeometry(0.24, 0.42, 1.0, 8);
-    TreeGenerator.sharedTrunkGeo.translate(0, 0.5, 0);
+    // Snapchat tree geometry: slightly elongated vertical lollipop puffs
+    const canopyGeoSmall = new THREE.SphereGeometry(2.4, 12, 12);
+    canopyGeoSmall.scale(1, 1.35, 1);
 
-    TreeGenerator.sharedFoliageGeo = new THREE.SphereGeometry(1.0, 8, 6);
+    const canopyGeoLarge = new THREE.SphereGeometry(3.6, 12, 12);
+    canopyGeoLarge.scale(1, 1.35, 1);
 
-    TreeGenerator.sharedTuftGeo = new THREE.ConeGeometry(0.22, 0.55, 4);
-    TreeGenerator.sharedTuftGeo.translate(0, 0.27, 0);
+    // Vibrant, fresh cute green colors matching Snapchat Map
+    const color1 = new THREE.Color('#8ed438'); // Bright fresh lime
+    const color2 = new THREE.Color('#aee848'); // Soft yellow-lime
 
-    TreeGenerator.sharedShadowGeo = new THREE.CircleGeometry(1.0, 10);
-    TreeGenerator.sharedShadowMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
+    const canopyMat = new THREE.MeshLambertMaterial();
+    const trunkMat = new THREE.MeshLambertMaterial({ color: '#8d6e63' });
+
+    const trunkGeoSmall = new THREE.CylinderGeometry(0.3, 0.45, 3.2, 6);
+    const trunkGeoLarge = new THREE.CylinderGeometry(0.45, 0.65, 4.2, 6);
+
+    const shadowGeo = new THREE.CircleGeometry(1, 14);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x224411,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.22,
       depthWrite: false,
     });
-  }
 
-  /**
-   * Evaluates the layout of a single tree and writes transforms into arrays.
-   * This allows us to pack them into InstancedMesh arrays for massive performance.
-   */
-  private generateTreeTransforms(x: number, y: number, z: number, scale: number, variant: number) {
-    const heightScale = 0.9 + (variant % 4) * 0.08;
-    const trunkHeight = 2.4 * heightScale * scale;
-    
-    const transforms: { geoType: string, matIndex: number, matrix: THREE.Matrix4 }[] = [];
+    const iCanopySmall = new THREE.InstancedMesh(canopyGeoSmall, canopyMat, treeCount);
+    const iCanopyLarge = new THREE.InstancedMesh(canopyGeoLarge, canopyMat, treeCount);
+    const iTrunkSmall = new THREE.InstancedMesh(trunkGeoSmall, trunkMat, treeCount);
+    const iTrunkLarge = new THREE.InstancedMesh(trunkGeoLarge, trunkMat, treeCount);
+    const iShadow = new THREE.InstancedMesh(shadowGeo, shadowMat, treeCount);
+
+    let smallIdx = 0;
+    let largeIdx = 0;
+
     const dummy = new THREE.Object3D();
 
-    // 1. Trunk
-    dummy.position.set(x, y, z);
-    dummy.rotation.set(0, 0, (variant % 2 === 0 ? 0.04 : -0.04));
-    dummy.scale.set(scale, trunkHeight, scale);
-    dummy.updateMatrix();
-    transforms.push({ geoType: 'trunk', matIndex: 0, matrix: dummy.matrix.clone() });
+    for (let i = 0; i < treeCount; i++) {
+      const seed = chunkX * 1000 + chunkZ * 100 + i;
+      const rx = chunkX * chunkSize - chunkSize / 2 + seededRandom(seed) * chunkSize;
+      const rz = chunkZ * chunkSize - chunkSize / 2 + seededRandom(seed + 1) * chunkSize;
 
-    // 2. Foliage Lobes
-    const foliageMatIdx = variant % this.foliageMats.length;
-    const foliageBaseY = y + trunkHeight * 0.85;
+      const isLarge = seededRandom(seed + 2) > 0.6;
+      const col = seededRandom(seed + 3) > 0.5 ? color1 : color2;
 
-    // Main Lobe
-    const mainRadius = 1.35 * scale;
-    dummy.position.set(x, foliageBaseY + mainRadius * 1.1, z);
-    dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(mainRadius, mainRadius * 1.45 * heightScale, mainRadius);
-    dummy.updateMatrix();
-    transforms.push({ geoType: 'foliage', matIndex: foliageMatIdx, matrix: dummy.matrix.clone() });
+      if (isLarge) {
+        // Large: trunk 4.2m, canopy radius 3.6m * 1.35
+        dummy.position.set(rx, 2.1, rz);
+        dummy.updateMatrix();
+        iTrunkLarge.setMatrixAt(largeIdx, dummy.matrix);
 
-    // Upper Lobe
-    const topRadius = 0.95 * scale;
-    dummy.position.set(x, foliageBaseY + mainRadius * 1.8 * heightScale, z);
-    dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(topRadius, topRadius * 1.2, topRadius);
-    dummy.updateMatrix();
-    transforms.push({ geoType: 'foliage', matIndex: foliageMatIdx, matrix: dummy.matrix.clone() });
+        dummy.position.set(rx, 4.2 + 3.2, rz);
+        dummy.updateMatrix();
+        iCanopyLarge.setMatrixAt(largeIdx, dummy.matrix);
+        iCanopyLarge.setColorAt(largeIdx, col);
 
-    // Side Lobe
-    const sideRadius = 0.75 * scale;
-    const sideAngle = (variant * 1.3) % (Math.PI * 2);
-    dummy.position.set(
-      x + Math.cos(sideAngle) * 0.55 * scale,
-      foliageBaseY + mainRadius * 0.9,
-      z + Math.sin(sideAngle) * 0.55 * scale
-    );
-    dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(sideRadius, sideRadius, sideRadius);
-    dummy.updateMatrix();
-    transforms.push({ geoType: 'foliage', matIndex: foliageMatIdx, matrix: dummy.matrix.clone() });
+        largeIdx++;
+      } else {
+        // Small: trunk 3.2m, canopy radius 2.4m * 1.35
+        dummy.position.set(rx, 1.6, rz);
+        dummy.updateMatrix();
+        iTrunkSmall.setMatrixAt(smallIdx, dummy.matrix);
 
-    // 3. Tufts
-    const tuftCount = 3;
-    for (let i = 0; i < tuftCount; i++) {
-      const angle = (i / tuftCount) * Math.PI * 2 + (variant * 0.5);
-      dummy.position.set(
-        x + Math.cos(angle) * 0.45 * scale,
-        y,
-        z + Math.sin(angle) * 0.45 * scale
-      );
-      dummy.rotation.set(0.28, angle, 0);
-      dummy.scale.set(scale, scale, scale);
+        dummy.position.set(rx, 3.2 + 2.2, rz);
+        dummy.updateMatrix();
+        iCanopySmall.setMatrixAt(smallIdx, dummy.matrix);
+        iCanopySmall.setColorAt(smallIdx, col);
+
+        smallIdx++;
+      }
+
+      // Soft ground shadow
+      const shadowRadius = isLarge ? 4.2 : 2.8;
+      dummy.position.set(rx, 0.08, rz);
+      dummy.rotation.x = -Math.PI / 2;
+      dummy.scale.set(shadowRadius, shadowRadius, 1);
       dummy.updateMatrix();
-      transforms.push({ geoType: 'tuft', matIndex: 0, matrix: dummy.matrix.clone() });
+      dummy.scale.set(1, 1, 1);
+      dummy.rotation.x = 0;
+      iShadow.setMatrixAt(i, dummy.matrix);
     }
 
-    // 4. Shadow
-    dummy.position.set(x + 0.5 * scale, y + 0.02, z + 0.5 * scale);
-    dummy.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
-    dummy.scale.set(1.4 * scale, 1.8 * scale, 1.0);
-    dummy.updateMatrix();
-    transforms.push({ geoType: 'shadow', matIndex: 0, matrix: dummy.matrix.clone() });
+    iCanopySmall.count = smallIdx;
+    iTrunkSmall.count = smallIdx;
+    iCanopyLarge.count = largeIdx;
+    iTrunkLarge.count = largeIdx;
 
-    return transforms;
-  }
-
-  
-  public createBush(scale = 1.0): THREE.Group {
-    const bush = new THREE.Group();
-    bush.name = 'cartoon-bush';
-    const r = 0.8 * scale;
-    const mesh = new THREE.Mesh(TreeGenerator.sharedFoliageGeo, this.bushMat);
-    mesh.scale.set(r * 1.2, r * 0.8, r);
-    mesh.position.set(0, r * 0.7, 0);
-    mesh.castShadow = true;
-    bush.add(mesh);
-    return bush;
-  }
-
-  
-  public createTree(scale = 1.0, variant = 0): THREE.Group {
-    const tree = new THREE.Group();
-    const t = this.generateTreeTransforms(0, 0, 0, scale, variant);
-    for (const tx of t) {
-      let geo, mat;
-      if (tx.geoType === 'trunk') { geo = TreeGenerator.sharedTrunkGeo; mat = this.trunkMat; }
-      else if (tx.geoType === 'foliage') { geo = TreeGenerator.sharedFoliageGeo; mat = this.foliageMats[tx.matIndex]; }
-      else if (tx.geoType === 'tuft') { geo = TreeGenerator.sharedTuftGeo; mat = this.tuftMat; }
-      else { geo = TreeGenerator.sharedShadowGeo; mat = TreeGenerator.sharedShadowMat; }
-      const mesh = new THREE.Mesh(geo, mat);
-      tx.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-      mesh.castShadow = true;
-      tree.add(mesh);
+    if (iCanopySmall.count > 0) {
+      iCanopySmall.instanceMatrix.needsUpdate = true;
+      if (iCanopySmall.instanceColor) iCanopySmall.instanceColor.needsUpdate = true;
+      iTrunkSmall.instanceMatrix.needsUpdate = true;
+      group.add(iCanopySmall, iTrunkSmall);
     }
-    return tree;
-  }
-
-  public generateTreeCluster(
-    centerX: number,
-    centerZ: number,
-    count: number,
-    radius: number,
-    minDistance = 6.0,
-    waterCheck?: (x: number, z: number) => boolean,
-    terrainEngine?: any
-  ): THREE.Group {
-    const cluster = new THREE.Group();
-    cluster.name = 'instanced-tree-cluster';
-
-    const placedPositions: { x: number; z: number }[] = [];
-    const allTransforms: any[] = [];
-
-    let attempts = 0;
-    while (placedPositions.length < count && attempts < count * 8) {
-      attempts++;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * radius;
-      const x = centerX + Math.cos(angle) * dist;
-      const z = centerZ + Math.sin(angle) * dist;
-
-      if (waterCheck && waterCheck(x, z)) continue;
-
-      const tooClose = placedPositions.some((p) => {
-        const dx = p.x - x;
-        const dz = p.z - z;
-        return Math.sqrt(dx * dx + dz * dz) < minDistance;
-      });
-
-      if (!tooClose) {
-        placedPositions.push({ x, z });
-        const scale = 0.9 + Math.random() * 0.35;
-        const variant = Math.floor(Math.random() * 12);
-        const y = terrainEngine ? terrainEngine.getElevation(x, z) : 0;
-        
-        allTransforms.push(...this.generateTreeTransforms(x, y, z, scale, variant));
-      }
+    if (iCanopyLarge.count > 0) {
+      iCanopyLarge.instanceMatrix.needsUpdate = true;
+      if (iCanopyLarge.instanceColor) iCanopyLarge.instanceColor.needsUpdate = true;
+      iTrunkLarge.instanceMatrix.needsUpdate = true;
+      group.add(iCanopyLarge, iTrunkLarge);
     }
+    iShadow.instanceMatrix.needsUpdate = true;
+    group.add(iShadow);
 
-    if (allTransforms.length === 0) return cluster;
-
-    // Group transforms by Geometry & Material
-    const groups: Record<string, { geo: THREE.BufferGeometry, mat: THREE.Material, matrices: THREE.Matrix4[] }> = {
-      'trunk_0': { geo: TreeGenerator.sharedTrunkGeo, mat: this.trunkMat, matrices: [] },
-      'tuft_0': { geo: TreeGenerator.sharedTuftGeo, mat: this.tuftMat, matrices: [] },
-      'shadow_0': { geo: TreeGenerator.sharedShadowGeo, mat: TreeGenerator.sharedShadowMat, matrices: [] },
-      'foliage_0': { geo: TreeGenerator.sharedFoliageGeo, mat: this.foliageMats[0], matrices: [] },
-      'foliage_1': { geo: TreeGenerator.sharedFoliageGeo, mat: this.foliageMats[1], matrices: [] },
-      'foliage_2': { geo: TreeGenerator.sharedFoliageGeo, mat: this.foliageMats[2], matrices: [] },
-    };
-
-    for (const t of allTransforms) {
-      const key = `${t.geoType}_${t.matIndex}`;
-      if (groups[key]) groups[key].matrices.push(t.matrix);
-    }
-
-    // Build InstancedMeshes
-    for (const key in groups) {
-      const g = groups[key];
-      if (g.matrices.length > 0) {
-        const imesh = new THREE.InstancedMesh(g.geo, g.mat, g.matrices.length);
-        imesh.castShadow = (key !== 'shadow_0');
-        imesh.receiveShadow = (key !== 'shadow_0');
-        
-        for (let i = 0; i < g.matrices.length; i++) {
-          imesh.setMatrixAt(i, g.matrices[i]);
-        }
-        imesh.instanceMatrix.needsUpdate = true;
-        cluster.add(imesh);
-      }
-    }
-
-    return cluster;
+    return group;
   }
 }
