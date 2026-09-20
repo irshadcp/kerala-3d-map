@@ -14,6 +14,7 @@ import { KeralaUrbanManager } from './KeralaUrbanManager';
 import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
+import { BuildingFacadeManager } from './BuildingFacadeManager';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -35,6 +36,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private urbanManager!: KeralaUrbanManager;
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
+  private buildingFacadeManager!: BuildingFacadeManager;
 
   private originLat: number;
   private originLng: number;
@@ -118,6 +120,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.urbanManager = new KeralaUrbanManager(this.scene);
     this.coastalManager = new KeralaCoastalManager(this.scene);
     this.roadsideManager = new KeralaRoadsideManager(this.scene);
+    this.buildingFacadeManager = new BuildingFacadeManager(this.scene);
 
     this.updateModelTransform(this.originLat, this.originLng);
     
@@ -165,7 +168,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           (window as any).__roadsideItems = this.roadsideManager.placedItems;
         }
 
-        // 9. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
+        // 10. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
         for (const group of this.loadedChunks.values()) {
           this.scene.remove(group);
           group.traverse((child) => {
@@ -179,6 +182,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
         const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
         this.updateChunks(local.x, local.z);
+
+        // 11. Generate ultra-lightweight windows, doors, and shutters on building blocks
+        this.buildingFacadeManager.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z, true);
       }
     };
 
@@ -209,6 +215,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       if (this.playerAvatarGroup) {
         this.playerAvatarGroup.position.set(local.x, 0, local.z);
         this.updateChunks(local.x, local.z);
+        this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z);
       }
     }
   }
@@ -308,6 +315,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.lastChunkCheckX = this.currentPos.x;
       this.lastChunkCheckZ = this.currentPos.y;
       this.updateChunks(this.currentPos.x, this.currentPos.y);
+      this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, this.currentPos.x, this.currentPos.y);
     }
   }
 
@@ -326,6 +334,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.highlandManager?.clear();
     this.urbanManager?.clear();
     this.coastalManager?.clear();
+    this.roadsideManager?.clear();
+    this.buildingFacadeManager?.clear();
 
     for (const group of this.loadedChunks.values()) {
       this.scene.remove(group);
@@ -561,6 +571,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.lastChunkCheckX = this.currentPos.x;
         this.lastChunkCheckZ = this.currentPos.y;
         this.updateChunks(this.currentPos.x, this.currentPos.y);
+        this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, this.currentPos.x, this.currentPos.y);
       }
       return true;
     }

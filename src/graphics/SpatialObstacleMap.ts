@@ -1,17 +1,19 @@
 import maplibregl from 'maplibre-gl';
 import { GeoCoords } from '../core/geoCoords';
 
-interface Point2D {
+export interface Point2D {
   x: number;
   z: number;
 }
 
-interface BuildingObstacle {
+export interface BuildingObstacle {
   minX: number;
   maxX: number;
   minZ: number;
   maxZ: number;
   rings: Point2D[][]; // outer ring + inner rings
+  height: number;
+  isCommercial?: boolean;
 }
 
 interface RoadObstacle {
@@ -136,11 +138,14 @@ export class SpatialObstacleMap {
       const coords = (feat.geometry as any).coordinates;
       if (!coords) continue;
 
+      const height = Number(feat.properties?.render_height || feat.properties?.height || 8);
+      const isCommercial = feat.properties?.class === 'commercial' || feat.properties?.class === 'retail' || feat.properties?.type === 'commercial' || feat.properties?.type === 'retail';
+
       if (type === 'Polygon') {
-        this.addBuildingPolygon(coords, originLat, originLng);
+        this.addBuildingPolygon(coords, originLat, originLng, height, isCommercial);
       } else if (type === 'MultiPolygon') {
         for (const poly of coords) {
-          this.addBuildingPolygon(poly, originLat, originLng);
+          this.addBuildingPolygon(poly, originLat, originLng, height, isCommercial);
         }
       }
     }
@@ -194,7 +199,13 @@ export class SpatialObstacleMap {
     return true; // Successfully refreshed
   }
 
-  private addBuildingPolygon(ringsGeo: number[][][], originLat: number, originLng: number) {
+  private addBuildingPolygon(
+    ringsGeo: number[][][],
+    originLat: number,
+    originLng: number,
+    height = 8,
+    isCommercial = false
+  ) {
     if (!ringsGeo || ringsGeo.length === 0) return;
 
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -213,7 +224,7 @@ export class SpatialObstacleMap {
       rings.push(convertedRing);
     }
 
-    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings };
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height, isCommercial };
 
     // Register into spatial buckets
     const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
@@ -294,7 +305,7 @@ export class SpatialObstacleMap {
       { x: minX, z: maxZ },
       { x: minX, z: minZ },
     ]];
-    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings };
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height: 8 };
 
     const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
     const endCellX = Math.floor((maxX + 4) / BUCKET_SIZE);
@@ -765,7 +776,7 @@ export class SpatialObstacleMap {
     return false; // Space is completely clear!
   }
 
-  private pointInPolygon(px: number, pz: number, ring: Point2D[]): boolean {
+  public static pointInPolygon(px: number, pz: number, ring: Point2D[]): boolean {
     if (!ring || ring.length < 3) return false;
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -775,6 +786,45 @@ export class SpatialObstacleMap {
       if (intersect) inside = !inside;
     }
     return inside;
+  }
+
+  public pointInPolygon(px: number, pz: number, ring: Point2D[]): boolean {
+    return SpatialObstacleMap.pointInPolygon(px, pz, ring);
+  }
+
+  /**
+   * Retrieves all buildings within a given radius (meters) around (centerX, centerZ).
+   */
+  public getBuildingsInRadius(centerX: number, centerZ: number, radius: number): BuildingObstacle[] {
+    if (!this.isReady) return [];
+    const cellRadius = Math.ceil(radius / BUCKET_SIZE);
+    const cellX = Math.floor(centerX / BUCKET_SIZE);
+    const cellZ = Math.floor(centerZ / BUCKET_SIZE);
+
+    const visited = new Set<BuildingObstacle>();
+    const result: BuildingObstacle[] = [];
+    const radiusSq = radius * radius;
+
+    for (let cx = cellX - cellRadius; cx <= cellX + cellRadius; cx++) {
+      for (let cz = cellZ - cellRadius; cz <= cellZ + cellRadius; cz++) {
+        const bldgs = this.buildingBuckets.get(this.getBucketKey(cx, cz));
+        if (!bldgs) continue;
+
+        for (const b of bldgs) {
+          if (visited.has(b)) continue;
+          visited.add(b);
+
+          const bMidX = (b.minX + b.maxX) * 0.5;
+          const bMidZ = (b.minZ + b.maxZ) * 0.5;
+          const dx = bMidX - centerX;
+          const dz = bMidZ - centerZ;
+          if (dx * dx + dz * dz <= radiusSq) {
+            result.push(b);
+          }
+        }
+      }
+    }
+    return result;
   }
 
   private distToSegment(px: number, pz: number, p1: Point2D, p2: Point2D): number {
