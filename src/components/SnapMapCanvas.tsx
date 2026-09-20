@@ -82,7 +82,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Buttery-smooth third-person chase camera tracking locked to character's back
+          // Ultra-smooth third-person chase camera locked to character's back
           if (map.current && !(window as any).__isManualRotating) {
             const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
             const currentBearing = map.current.getBearing();
@@ -90,7 +90,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             while (diff < -180) diff += 360;
             while (diff > 180) diff -= 360;
 
-            const newBearing = (currentBearing + diff * 0.1) % 360;
+            const newBearing = (currentBearing + diff * 0.035 + 360) % 360;
             map.current.jumpTo({
               center: [pLng, pLat],
               bearing: newBearing,
@@ -111,6 +111,34 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         return isRotateModeRef.current;
       },
     }));
+
+    // Smooth dedicated camera follow loop for tap-to-walk (independent of WebGL render)
+    useEffect(() => {
+      let animId: number;
+      const chaseLoop = () => {
+        if (threeLayer.current && map.current && threeLayer.current.isWalking) {
+          if (!(window as any).__isManualRotating) {
+            const pLng = threeLayer.current.playerLng;
+            const pLat = threeLayer.current.playerLat;
+            const heading = threeLayer.current.character.getHeading();
+            const targetBearing = ((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360;
+            const currentBearing = map.current.getBearing();
+            let diff = targetBearing - currentBearing;
+            while (diff < -180) diff += 360;
+            while (diff > 180) diff -= 360;
+
+            const newBearing = (currentBearing + diff * 0.035 + 360) % 360;
+            map.current.jumpTo({
+              center: [pLng, pLat],
+              bearing: newBearing,
+            });
+          }
+        }
+        animId = requestAnimationFrame(chaseLoop);
+      };
+      animId = requestAnimationFrame(chaseLoop);
+      return () => cancelAnimationFrame(animId);
+    }, []);
 
     useEffect(() => {
       if (!mapContainer.current) return;

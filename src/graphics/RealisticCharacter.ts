@@ -235,6 +235,10 @@ export class RealisticCharacter {
     this.targetHeading = angleRad;
   }
 
+  public getHeading(): number {
+    return this.currentHeading;
+  }
+
   /**
    * Update character animations:
    * - Smooth walking strides (alternate leg and counter arm swings)
