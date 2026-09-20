@@ -3,14 +3,14 @@ import { SpatialObstacleMap } from './SpatialObstacleMap';
 
 /**
  * BuildingFacadeManager
- * Generates ultra-lightweight procedural windows, residential doors, and commercial shutters
- * for 3D extruded buildings using THREE.InstancedMesh.
+ * Generates ultra-lightweight floor-based procedural double windows, residential entrance doors,
+ * and commercial shopfront shutters for OpenStreetMap 3D extruded blank boxes.
  * 
- * Performance architecture:
- * - Exactly 3 GPU draw calls for all buildings across the city.
- * - Procedural canvas textures with baked lighting and reflections.
- * - Spatial bucket querying (only processes buildings in 180m radius).
- * - Updates only when player travels > 25m (0 overhead during walking/camera motion).
+ * Rules:
+ * - Only applies to real OpenStreetMap 3D buildings (zero custom props, parking lots, temples, or tea stalls).
+ * - Proper floor-by-floor vertical layout (Ground, 1st, 2nd, 3rd floors based on building height).
+ * - Uses wide dual-casement double windows (not single isolated window squares).
+ * - Exactly 3 GPU draw calls total using THREE.InstancedMesh.
  * - Polygon offset enabled for zero z-fighting on building walls.
  */
 export class BuildingFacadeManager {
@@ -20,7 +20,7 @@ export class BuildingFacadeManager {
   private doorMesh: THREE.InstancedMesh;
   private shutterMesh: THREE.InstancedMesh;
 
-  private readonly MAX_WINDOWS = 3500;
+  private readonly MAX_WINDOWS = 4000;
   private readonly MAX_DOORS = 400;
   private readonly MAX_SHUTTERS = 400;
 
@@ -44,12 +44,12 @@ export class BuildingFacadeManager {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
 
-    // 1. Generate Crisp Procedural Canvas Textures
-    this.windowTex = this.createWindowTexture();
+    // 1. Generate High-Fidelity Procedural Textures
+    this.windowTex = this.createDoubleWindowTexture();
     this.doorTex = this.createDoorTexture();
     this.shutterTex = this.createShutterTexture();
 
-    // 2. High-Performance Polygon-Offset Materials (Prevents Z-Fighting on Extruded Walls)
+    // 2. High-Performance Polygon-Offset Materials
     this.windowMat = new THREE.MeshBasicMaterial({
       map: this.windowTex,
       polygonOffset: true,
@@ -74,12 +74,13 @@ export class BuildingFacadeManager {
       side: THREE.FrontSide,
     });
 
-    // 3. Human-Scale Planar Geometries
-    this.windowGeo = new THREE.PlaneGeometry(1.25, 1.45);
+    // 3. Wide Dual-Casement Double Windows & Real Proportions
+    // 2.2m wide double window (pair of architectural windows with center mullion)
+    this.windowGeo = new THREE.PlaneGeometry(2.2, 1.35);
     this.doorGeo = new THREE.PlaneGeometry(1.3, 2.2);
-    this.shutterGeo = new THREE.PlaneGeometry(1.85, 2.2);
+    this.shutterGeo = new THREE.PlaneGeometry(2.2, 2.2);
 
-    // 4. Batched Instanced Meshes (Only 3 Draw Calls Total!)
+    // 4. Batched Instanced Meshes (Only 3 Draw Calls for the entire map!)
     this.windowMesh = new THREE.InstancedMesh(this.windowGeo, this.windowMat, this.MAX_WINDOWS);
     this.doorMesh = new THREE.InstancedMesh(this.doorGeo, this.doorMat, this.MAX_DOORS);
     this.shutterMesh = new THREE.InstancedMesh(this.shutterGeo, this.shutterMat, this.MAX_SHUTTERS);
@@ -99,7 +100,7 @@ export class BuildingFacadeManager {
 
   /**
    * Updates facade instances around the player.
-   * Only recomputes if player moves > 25m or when force = true.
+   * Only processes real OpenStreetMap buildings (osmOnly = true).
    */
   public update(
     obstacleMap: SpatialObstacleMap,
@@ -120,8 +121,8 @@ export class BuildingFacadeManager {
     this.lastUpdateZ = playerZ;
     this.isPlaced = true;
 
-    // Radius of visible facade details: 180m (optimal for high FPS & crisp view)
-    const buildings = obstacleMap.getBuildingsInRadius(playerX, playerZ, 180);
+    // Radius: 180m around the player (strictly real OSM buildings only, osmOnly = true)
+    const buildings = obstacleMap.getBuildingsInRadius(playerX, playerZ, 180, true);
     if (buildings.length === 0) {
       this.clear();
       return;
@@ -132,14 +133,39 @@ export class BuildingFacadeManager {
     let shutterIdx = 0;
 
     for (const bldg of buildings) {
+      // Safety: skip any custom landmarks, parking lots, tea shops, temples, etc.
+      if (bldg.isCustomObstacle) continue;
       if (!bldg.rings || bldg.rings.length === 0) continue;
+
       const outerRing = bldg.rings[0];
       if (outerRing.length < 3) continue;
 
       const height = bldg.height || 8;
       const isCommercial = bldg.isCommercial || false;
 
-      // Seeded determination of primary entrance wall
+      // Determine Floor Elevations based on building height
+      // Each floor is ~2.6m to 3.0m high
+      const floorElevations: number[] = [];
+      if (height < 4.0) {
+        // 1-story low building
+        floorElevations.push(1.25);
+      } else if (height < 6.8) {
+        // 2-story building (Ground + 1st floor)
+        floorElevations.push(1.25, 3.5);
+      } else if (height < 9.8) {
+        // 3-story building (Standard 8m OSM building)
+        floorElevations.push(1.25, 3.7, 6.2);
+      } else if (height < 12.8) {
+        // 4-story building
+        floorElevations.push(1.25, 3.7, 6.2, 8.8);
+      } else {
+        // Tall building: floors every 2.7m
+        for (let y = 1.25; y + 0.75 <= height - 0.4; y += 2.7) {
+          floorElevations.push(y);
+        }
+      }
+
+      // Find the primary entrance wall (longest suitable wall)
       let maxWallLen = 0;
       let primaryWallIdx = -1;
 
@@ -153,7 +179,7 @@ export class BuildingFacadeManager {
         }
       }
 
-      // Loop through wall segments
+      // Process exterior wall segments
       for (let i = 0; i < outerRing.length - 1; i++) {
         const p1 = outerRing[i];
         const p2 = outerRing[i + 1];
@@ -161,93 +187,85 @@ export class BuildingFacadeManager {
         const dz = p2.z - p1.z;
         const wallLen = Math.hypot(dx, dz);
 
-        // Skip walls that are too narrow for standard windows/doors
-        if (wallLen < 2.4) continue;
+        // Require minimum 3.0m for wide double window + margins
+        if (wallLen < 3.0) continue;
 
-        // Tangent along wall
         const tx = dx / wallLen;
         const tz = dz / wallLen;
 
-        // Candidate normal (perpendicular)
+        // Candidate outward normal
         let nx = -tz;
         let nz = tx;
 
-        // Verify that normal points OUTWARD (away from building interior)
         const mx = (p1.x + p2.x) * 0.5;
         const mz = (p1.z + p2.z) * 0.5;
-        const testIn = SpatialObstacleMap.pointInPolygon(mx + nx * 0.25, mz + nz * 0.25, outerRing);
-        if (testIn) {
+
+        // Ensure normal points OUTWARD (away from building interior)
+        if (SpatialObstacleMap.pointInPolygon(mx + nx * 0.2, mz + nz * 0.2, outerRing)) {
           nx = -nx;
           nz = -nz;
         }
 
-        // Clearance check: do not put windows on a shared party wall touching another building
-        const testClearanceX = mx + nx * 0.6;
-        const testClearanceZ = mz + nz * 0.6;
-        if (obstacleMap.isBuildingCollision(testClearanceX, testClearanceZ, 0.2, 0.2, 0)) {
-          continue; // Blocked wall / internal alleyway
+        // Clearance check: do not put windows if this wall directly abuts another building
+        let isAbuttingOther = false;
+        for (const other of buildings) {
+          if (other === bldg) continue;
+          if (SpatialObstacleMap.pointInPolygon(mx + nx * 0.4, mz + nz * 0.4, other.rings[0])) {
+            isAbuttingOther = true;
+            break;
+          }
         }
+        if (isAbuttingOther) continue;
 
-        // Rotation angle for outward facing plane
         const rotY = Math.atan2(nx, nz);
 
-        // Wall spacing
-        const margin = 1.2; // clearance from building corners
+        // Calculate bay slots along the wall
+        const margin = 1.5; // margin from building corners
         const usable = wallLen - 2 * margin;
-        if (usable < 1.0) continue;
 
-        const bayCount = Math.max(1, Math.floor(usable / 3.0));
-        const step = usable / bayCount;
-        const centerBay = Math.floor(bayCount / 2);
+        let bays = 1;
+        let step = usable;
+        if (usable >= 1.0) {
+          bays = Math.max(1, Math.floor(usable / 3.6));
+          step = usable / bays;
+        }
 
-        const hasEntrance = (i === primaryWallIdx || (wallLen > 15 && i % 2 === 0));
+        const centerBay = Math.floor(bays / 2);
+        const hasEntrance = (i === primaryWallIdx || (wallLen > 18 && i % 2 === 0));
 
-        for (let k = 0; k < bayCount; k++) {
-          const s = margin + (k + 0.5) * step;
+        // Place features bay by bay, vertically aligned on EVERY floor
+        for (let k = 0; k < bays; k++) {
+          const s = usable < 1.0 ? wallLen * 0.5 : margin + (k + 0.5) * step;
           const wx = p1.x + tx * s + nx * 0.045; // 4.5cm outward offset
           const wz = p1.z + tz * s + nz * 0.045;
 
-          // --- GROUND FLOOR ---
-          if (hasEntrance && k === centerBay) {
-            if (isCommercial && shutterIdx < this.MAX_SHUTTERS) {
-              // Commercial rolling shop shutter
-              this.dummy.position.set(wx, 1.1, wz);
-              this.dummy.rotation.set(0, rotY, 0);
-              this.dummy.scale.set(1, 1, 1);
-              this.dummy.updateMatrix();
-              this.shutterMesh.setMatrixAt(shutterIdx++, this.dummy.matrix);
-            } else if (doorIdx < this.MAX_DOORS) {
-              // Teak wood residential entrance door
-              this.dummy.position.set(wx, 1.1, wz);
-              this.dummy.rotation.set(0, rotY, 0);
-              this.dummy.scale.set(1, 1, 1);
-              this.dummy.updateMatrix();
-              this.doorMesh.setMatrixAt(doorIdx++, this.dummy.matrix);
-            }
-          } else if (windowIdx < this.MAX_WINDOWS) {
-            // Ground floor window
-            this.dummy.position.set(wx, 1.4, wz);
-            this.dummy.rotation.set(0, rotY, 0);
-            this.dummy.scale.set(1, 1, 1);
-            this.dummy.updateMatrix();
-            this.windowMesh.setMatrixAt(windowIdx++, this.dummy.matrix);
-          }
+          for (let fIdx = 0; fIdx < floorElevations.length; fIdx++) {
+            const yElevation = floorElevations[fIdx];
 
-          // --- UPPER FLOORS ---
-          for (let floor = 1; ; floor++) {
-            const yElevation = 1.4 + floor * 3.0; // 3m floor-to-floor height
-            if (yElevation + 0.75 > height - 0.3) {
-              break; // Ensure window stays cleanly below the roof line
-            }
-
-            if (windowIdx < this.MAX_WINDOWS) {
+            // --- GROUND FLOOR (fIdx === 0) ---
+            if (fIdx === 0 && hasEntrance && k === centerBay) {
+              if (isCommercial && shutterIdx < this.MAX_SHUTTERS) {
+                // Commercial rolling shopfront shutter
+                this.dummy.position.set(wx, 1.1, wz);
+                this.dummy.rotation.set(0, rotY, 0);
+                this.dummy.scale.set(1, 1, 1);
+                this.dummy.updateMatrix();
+                this.shutterMesh.setMatrixAt(shutterIdx++, this.dummy.matrix);
+              } else if (doorIdx < this.MAX_DOORS) {
+                // Teak wood residential entrance door
+                this.dummy.position.set(wx, 1.1, wz);
+                this.dummy.rotation.set(0, rotY, 0);
+                this.dummy.scale.set(1, 1, 1);
+                this.dummy.updateMatrix();
+                this.doorMesh.setMatrixAt(doorIdx++, this.dummy.matrix);
+              }
+            } else if (windowIdx < this.MAX_WINDOWS) {
+              // --- ALL OTHER BAYS & ALL UPPER FLOORS: WIDE DOUBLE WINDOWS ---
               this.dummy.position.set(wx, yElevation, wz);
               this.dummy.rotation.set(0, rotY, 0);
               this.dummy.scale.set(1, 1, 1);
               this.dummy.updateMatrix();
               this.windowMesh.setMatrixAt(windowIdx++, this.dummy.matrix);
-            } else {
-              break;
             }
           }
         }
@@ -299,58 +317,95 @@ export class BuildingFacadeManager {
   // =========================================================================
 
   /**
-   * Modern architectural 4-pane window with sky reflection gradient,
-   * ivory frame, diagonal glare, and bottom sill.
+   * Dual-Casement Double Window (256 x 144)
+   * Two side-by-side architectural glass casements with white frames,
+   * sky reflection gradient, glass glare, top weather chajja, and bottom sill.
    */
-  private createWindowTexture(): THREE.CanvasTexture {
+  private createDoubleWindowTexture(): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
-    canvas.width = 128;
+    canvas.width = 256;
     canvas.height = 144;
     const ctx = canvas.getContext('2d')!;
 
-    // 1. Crisp architectural frame (Ivory)
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(0, 0, 128, 144);
-
-    // 2. Window reveal / inner shadow
+    // 1. Top Concrete Sunshade / Weather Chajja Lintels
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(0, 0, 256, 10);
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(6, 6, 116, 124);
+    ctx.fillRect(0, 10, 256, 4); // Chajja cast shadow
 
-    // 3. Glass Panes with daytime sky reflection gradient
-    const glassGrad = ctx.createLinearGradient(0, 8, 0, 128);
-    glassGrad.addColorStop(0, '#38bdf8');   // Bright sky reflection
+    // 2. Main Wall Reveal & Window Frame (Ivory / Off-White)
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(4, 14, 248, 118);
+
+    // 3. Inner shadow reveal
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(8, 18, 114, 110);  // Left Casement recess
+    ctx.fillRect(134, 18, 114, 110); // Right Casement recess
+
+    // 4. Glass Panes with Daylight Sky Reflection Gradient
+    const glassGrad = ctx.createLinearGradient(0, 20, 0, 126);
+    glassGrad.addColorStop(0, '#38bdf8');   // Daylight sky highlight
     glassGrad.addColorStop(0.35, '#0284c7');
     glassGrad.addColorStop(0.7, '#0f172a');  // Interior depth
     glassGrad.addColorStop(1, '#020617');
 
-    // 4 Panes
+    // Left Casement Panes (Upper & Lower)
     ctx.fillStyle = glassGrad;
-    ctx.fillRect(10, 10, 50, 54);  // Upper Left
-    ctx.fillRect(68, 10, 50, 54);  // Upper Right
-    ctx.fillRect(10, 72, 50, 54);  // Lower Left
-    ctx.fillRect(68, 72, 50, 54);  // Lower Right
+    ctx.fillRect(12, 22, 106, 48); // Upper Left
+    ctx.fillRect(12, 76, 106, 48); // Lower Left
 
-    // 4. Diagonal light sheen / reflection
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+    // Right Casement Panes (Upper & Lower)
+    ctx.fillRect(138, 22, 106, 48); // Upper Right
+    ctx.fillRect(138, 76, 106, 48); // Lower Right
+
+    // 5. Diagonal Glass Glare Sheen
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.26)';
+    // Left glare
     ctx.beginPath();
-    ctx.moveTo(10, 10);
-    ctx.lineTo(40, 10);
-    ctx.lineTo(10, 48);
+    ctx.moveTo(12, 22);
+    ctx.lineTo(55, 22);
+    ctx.lineTo(12, 70);
     ctx.closePath();
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(68, 10);
-    ctx.lineTo(118, 10);
-    ctx.lineTo(68, 72);
+    ctx.moveTo(60, 22);
+    ctx.lineTo(118, 22);
+    ctx.lineTo(12, 124);
     ctx.closePath();
     ctx.fill();
 
-    // 5. Concrete Window Sill at bottom
+    // Right glare
+    ctx.beginPath();
+    ctx.moveTo(138, 22);
+    ctx.lineTo(180, 22);
+    ctx.lineTo(138, 70);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(185, 22);
+    ctx.lineTo(244, 22);
+    ctx.lineTo(138, 124);
+    ctx.closePath();
+    ctx.fill();
+
+    // 6. Sub-pane Transom divider bars (White)
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(8, 70, 114, 6);
+    ctx.fillRect(134, 70, 114, 6);
+
+    // 7. Center Mullion Post (Ivory Frame Divider)
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(2, 130, 124, 10);
+    ctx.fillRect(122, 14, 12, 118);
     ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(2, 140, 124, 4); // sill drop shadow
+    ctx.fillRect(122, 14, 2, 118); // shadow line
+
+    // 8. Bottom Concrete Window Sill
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(0, 132, 256, 8);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(0, 140, 256, 4); // Sill drop shadow
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.anisotropy = 2;
@@ -422,39 +477,39 @@ export class BuildingFacadeManager {
    */
   private createShutterTexture(): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
-    canvas.width = 128;
+    canvas.width = 180;
     canvas.height = 220;
     const ctx = canvas.getContext('2d')!;
 
     // Steel frame
     ctx.fillStyle = '#334155';
-    ctx.fillRect(0, 0, 128, 220);
+    ctx.fillRect(0, 0, 180, 220);
 
     // Top Shutter Hood Box (Cyan Commercial Lintel)
     ctx.fillStyle = '#0284c7';
-    ctx.fillRect(6, 6, 116, 28);
+    ctx.fillRect(8, 6, 164, 28);
     ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('STORE', 64, 24);
+    ctx.fillText('STORE', 90, 24);
 
     // Rolling Steel Shutter Slats
     for (let y = 38; y < 204; y += 8) {
       ctx.fillStyle = (y % 16 === 0) ? '#64748b' : '#94a3b8';
-      ctx.fillRect(10, y, 108, 7);
+      ctx.fillRect(12, y, 156, 7);
       ctx.fillStyle = '#475569';
-      ctx.fillRect(10, y + 6, 108, 1); // slat shadow
+      ctx.fillRect(12, y + 6, 156, 1); // slat shadow
     }
 
     // Shutter Center Lock & Padlock
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(58, 192, 12, 10);
+    ctx.fillRect(84, 192, 12, 10);
     ctx.fillStyle = '#facc15';
-    ctx.fillRect(62, 196, 4, 3); // brass lock
+    ctx.fillRect(88, 196, 4, 3); // brass lock
 
     // Bottom weather seal
     ctx.fillStyle = '#1e293b';
-    ctx.fillRect(8, 204, 112, 8);
+    ctx.fillRect(8, 204, 164, 8);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.anisotropy = 2;

@@ -14,6 +14,7 @@ export interface BuildingObstacle {
   rings: Point2D[][]; // outer ring + inner rings
   height: number;
   isCommercial?: boolean;
+  isCustomObstacle?: boolean;
 }
 
 interface RoadObstacle {
@@ -224,7 +225,7 @@ export class SpatialObstacleMap {
       rings.push(convertedRing);
     }
 
-    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height, isCommercial };
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height, isCommercial, isCustomObstacle: false };
 
     // Register into spatial buckets
     const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
@@ -305,7 +306,7 @@ export class SpatialObstacleMap {
       { x: minX, z: maxZ },
       { x: minX, z: minZ },
     ]];
-    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height: 8 };
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings, height: 8, isCustomObstacle: true };
 
     const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
     const endCellX = Math.floor((maxX + 4) / BUCKET_SIZE);
@@ -794,8 +795,14 @@ export class SpatialObstacleMap {
 
   /**
    * Retrieves all buildings within a given radius (meters) around (centerX, centerZ).
+   * By default (osmOnly = true), strictly ignores custom landmarks/props (parking lots, tea stalls, temples, etc.).
    */
-  public getBuildingsInRadius(centerX: number, centerZ: number, radius: number): BuildingObstacle[] {
+  public getBuildingsInRadius(
+    centerX: number,
+    centerZ: number,
+    radius: number,
+    osmOnly = true
+  ): BuildingObstacle[] {
     if (!this.isReady) return [];
     const cellRadius = Math.ceil(radius / BUCKET_SIZE);
     const cellX = Math.floor(centerX / BUCKET_SIZE);
@@ -813,6 +820,11 @@ export class SpatialObstacleMap {
         for (const b of bldgs) {
           if (visited.has(b)) continue;
           visited.add(b);
+
+          // Strictly skip custom props/landmarks (parking lots, tea stalls, temples, playgrounds, etc.)
+          if (osmOnly && b.isCustomObstacle) {
+            continue;
+          }
 
           const bMidX = (b.minX + b.maxX) * 0.5;
           const bMidZ = (b.minZ + b.maxZ) * 0.5;
