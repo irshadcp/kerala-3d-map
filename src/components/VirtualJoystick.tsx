@@ -6,15 +6,17 @@ interface VirtualJoystickProps {
 }
 
 export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCameraBearing }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const zoneRef = useRef<HTMLDivElement>(null);
   const [knobPos, setKnobPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [basePos, setBasePos] = useState<{ x: number; y: number } | null>(null);
   const [isActive, setIsActive] = useState(false);
   const pointerIdRef = useRef<number | null>(null);
   const currentVectorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(performance.now());
+  const originRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const radius = 38; // Max thumbstick displacement in pixels
+  const radius = 42; // Max thumbstick displacement in pixels
 
   // Continuous movement loop while active
   const tickMovement = useCallback(() => {
@@ -60,37 +62,29 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
     };
   }, [isActive, tickMovement, onMove]);
 
-  // Pointer event handlers
+  // Pointer event handlers on the touch zone
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!containerRef.current) return;
+    if (!zoneRef.current) return;
     pointerIdRef.current = e.pointerId;
-    containerRef.current.setPointerCapture(e.pointerId);
+    zoneRef.current.setPointerCapture(e.pointerId);
     lastTimeRef.current = performance.now();
+
+    const rect = zoneRef.current.getBoundingClientRect();
+    const touchX = e.clientX - rect.left;
+    const touchY = e.clientY - rect.top;
+
+    originRef.current = { x: e.clientX, y: e.clientY };
+    setBasePos({ x: touchX, y: touchY });
+    setKnobPos({ x: 0, y: 0 });
+    currentVectorRef.current = { x: 0, y: 0 };
     setIsActive(true);
-    updatePosition(e.clientX, e.clientY);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isActive || e.pointerId !== pointerIdRef.current) return;
-    updatePosition(e.clientX, e.clientY);
-  };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (e.pointerId !== pointerIdRef.current) return;
-    pointerIdRef.current = null;
-    setIsActive(false);
-    setKnobPos({ x: 0, y: 0 });
-    currentVectorRef.current = { x: 0, y: 0 };
-  };
-
-  const updatePosition = (clientX: number, clientY: number) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    const dx = clientX - centerX;
-    const dy = clientY - centerY;
+    const dx = e.clientX - originRef.current.x;
+    const dy = e.clientY - originRef.current.y;
     const dist = Math.hypot(dx, dy);
 
     const clampedDist = Math.min(dist, radius);
@@ -106,11 +100,22 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
     currentVectorRef.current = { x: nx, y: ny };
   };
 
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (e.pointerId !== pointerIdRef.current) return;
+    pointerIdRef.current = null;
+    setIsActive(false);
+    setKnobPos({ x: 0, y: 0 });
+    currentVectorRef.current = { x: 0, y: 0 };
+    setBasePos(null);
+  };
+
   // Keyboard WASD / Arrow Keys listener for desktop
   useEffect(() => {
     const keys: Record<string, boolean> = {};
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         keys[e.code] = true;
         updateKeyboardVector();
@@ -157,29 +162,47 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
 
   return (
     <div
-      ref={containerRef}
+      ref={zoneRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-900/40 backdrop-blur-md border border-white/30 shadow-2xl flex items-center justify-center touch-none select-none transition-all duration-150 ${
-        isActive ? 'scale-105 bg-slate-900/60 ring-2 ring-emerald-400/50' : 'opacity-85 hover:opacity-100'
-      }`}
+      className="absolute bottom-0 left-0 w-[55vw] sm:w-[380px] h-[35vh] sm:h-[280px] pointer-events-auto touch-none select-none z-20"
       style={{ touchAction: 'none' }}
-      title="Walk / Run Joystick (or use WASD keys)"
     >
-      {/* Direction Cross Markings */}
-      <div className="absolute w-full h-[1px] bg-white/20 pointer-events-none" />
-      <div className="absolute h-full w-[1px] bg-white/20 pointer-events-none" />
-
-      {/* Floating Center Thumb Knob */}
+      {/* Joystick Base Ring - Floating dynamically under thumb when active, or resting at bottom-left */}
       <div
-        className="absolute w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/95 shadow-md border-2 border-emerald-500 flex items-center justify-center pointer-events-none transition-transform ease-out duration-75"
-        style={{
-          transform: `translate3d(${knobPos.x}px, ${knobPos.y}px, 0)`,
-        }}
+        className={`absolute rounded-full border border-white/40 shadow-2xl flex items-center justify-center transition-opacity duration-200 pointer-events-none ${
+          isActive
+            ? 'w-24 h-24 sm:w-28 sm:h-28 bg-slate-900/60 backdrop-blur-md ring-2 ring-emerald-400/60 opacity-100'
+            : 'w-20 h-20 sm:w-24 sm:h-24 bg-slate-900/35 backdrop-blur-sm opacity-60 hover:opacity-85'
+        }`}
+        style={
+          basePos
+            ? {
+                left: `${basePos.x}px`,
+                top: `${basePos.y}px`,
+                transform: 'translate(-50%, -50%)',
+              }
+            : {
+                left: '28px',
+                bottom: '24px',
+              }
+        }
       >
-        <div className="w-2.5 h-2.5 rounded-full bg-emerald-600 shadow-inner" />
+        {/* Crosshair indicators */}
+        <div className="absolute w-full h-[1px] bg-white/20 pointer-events-none" />
+        <div className="absolute h-full w-[1px] bg-white/20 pointer-events-none" />
+
+        {/* Center Thumb Knob */}
+        <div
+          className="absolute w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 shadow-lg border-2 border-emerald-500 flex items-center justify-center pointer-events-none transition-transform ease-out duration-75"
+          style={{
+            transform: `translate3d(${knobPos.x}px, ${knobPos.y}px, 0)`,
+          }}
+        >
+          <div className="w-3 h-3 rounded-full bg-emerald-600 shadow-inner" />
+        </div>
       </div>
     </div>
   );

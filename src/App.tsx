@@ -10,37 +10,7 @@ import VoiceControls from './components/VoiceControls';
 import { MultiplayerManager, LocalUserProfile } from './network/MultiplayerManager';
 import { RemotePlayerData } from './graphics/RemotePlayerManager';
 import { GeocodingResult } from './services/geocodingService';
-import { PerformanceTier, detectDeviceTier } from './utils/deviceTier';
-import {
-  MapPin,
-  ChevronDown,
-  Navigation,
-  Search,
-  MessageCircle,
-  Camera,
-  Users,
-  PlaySquare,
-  Sun,
-  Flame,
-  Clock,
-  Sparkles,
-  RotateCw,
-  RotateCcw,
-  Compass,
-  Globe,
-  Fuel,
-  Bus,
-  Trophy,
-  Coffee,
-  Ship,
-  Landmark,
-  Mountain,
-  Waves,
-  Building2,
-  Home,
-  Sprout,
-  Store
-} from 'lucide-react';
+import { ChevronDown, Sun, Search } from 'lucide-react';
 import './styles/theme.css';
 
 const DEFAULT_LOCATION: LocationPreset = {
@@ -60,11 +30,8 @@ function App() {
   const [currentLocation, setCurrentLocation] = useState<LocationPreset>(DEFAULT_LOCATION);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [resetTrigger, setResetTrigger] = useState(0);
-  const [is3DMode, setIs3DMode] = useState(true);
-  const [isRotateMode, setIsRotateMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
   const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
-  const [performanceTier, setPerformanceTierState] = useState<PerformanceTier>(() => detectDeviceTier());
+  const [isDeafened, setIsDeafened] = useState(false);
 
   // User profile state - auto-generated ephemeral profile so P2P networking connects immediately on load
   const [userProfile, setUserProfile] = useState<LocalUserProfile>(() => ({
@@ -255,50 +222,11 @@ function App() {
     setIsSearchOpen(false);
   };
 
-  const handleToggle3D = () => {
-    if (canvasRef.current) {
-      const mode = canvasRef.current.toggle3D();
-      setIs3DMode(mode);
-    }
-  };
-
-  const handleTogglePerformance = () => {
-    const nextTier: PerformanceTier = performanceTier === 'performance' ? 'high' : 'performance';
-    setPerformanceTierState(nextTier);
-    if (canvasRef.current) {
-      canvasRef.current.setPerformanceTier(nextTier);
-    }
-  };
-
-  const handleToggleRotateMode = () => {
-    if (canvasRef.current) {
-      const mode = canvasRef.current.toggleRotateMode();
-      setIsRotateMode(mode);
-    }
-  };
-
-  const handleRotateLeft = () => {
-    if (canvasRef.current) {
-      canvasRef.current.rotateBy(-45);
-    }
-  };
-
-  const handleRotateRight = () => {
-    if (canvasRef.current) {
-      canvasRef.current.rotateBy(45);
-    }
-  };
-
-  const handleResetRotation = () => {
-    if (canvasRef.current) {
-      canvasRef.current.resetRotation();
-    }
-  };
-
-  const handleRecenter = () => {
-    if (canvasRef.current) {
-      canvasRef.current.recenter();
-    }
+  const handleToggleDeafen = () => {
+    const nextDeafened = !isDeafened;
+    setIsDeafened(nextDeafened);
+    const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
+    threeLayer?.remotePlayerManager?.setDeafened(nextDeafened);
   };
 
   const handleFlyToPlayer = (lat: number, lng: number, name: string) => {
@@ -437,6 +365,8 @@ function App() {
                 }
                 return false;
               }}
+              isDeafened={isDeafened}
+              onToggleDeafen={handleToggleDeafen}
             />
 
             <button
@@ -448,495 +378,10 @@ function App() {
             </button>
           </div>
         </div>
-
-        {/* Row 2: Snapchat Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pointer-events-auto px-1">
-          <button
-            onClick={() => setActiveTab('memories')}
-            className={`glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm
-              ${activeTab === 'memories' ? 'bg-white text-gray-900 shadow-md font-bold' : 'text-gray-700'}`}
-          >
-            <Clock size={13} className="text-purple-500" />
-            <span>Memories</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('top')}
-            className={`glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm
-              ${activeTab === 'top' ? 'bg-white text-gray-900 shadow-md font-bold' : 'text-gray-700'}`}
-          >
-            <Sparkles size={13} className="text-amber-500" />
-            <span>Top visited</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('trending')}
-            className={`glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm
-              ${activeTab === 'trending' ? 'bg-white text-gray-900 shadow-md font-bold' : 'text-gray-700'}`}
-          >
-            <Flame size={13} className="text-red-500" />
-            <span>Trending</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('visited')}
-            className={`glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm
-              ${activeTab === 'visited' ? 'bg-white text-gray-900 shadow-md font-bold' : 'text-gray-700'}`}
-          >
-            <MapPin size={13} className="text-emerald-500" />
-            <span>Visited</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const pumps = (window as any).__pumps;
-              if (pumps && pumps.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__pumpIdx || 0) % pumps.length;
-                  (window as any).__pumpIdx = nextIdx + 1;
-                  const targetPump = pumps[nextIdx];
-                  map.flyTo({
-                    center: [targetPump.lng, targetPump.lat],
-                    zoom: 18.2,
-                    pitch: 75,
-                    bearing: 45,
-                    duration: 1400,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-600 cursor-pointer"
-            title="Jump to Nearest Petrol Pump"
-          >
-            <Fuel size={13} className="text-emerald-600" />
-            <span>Petrol Pump</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const stops = (window as any).__busStops;
-              if (stops && stops.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__busIdx || 0) % stops.length;
-                  (window as any).__busIdx = nextIdx + 1;
-                  const targetStop = stops[nextIdx];
-                  map.flyTo({
-                    center: [targetStop.lng, targetStop.lat],
-                    zoom: 18.5,
-                    pitch: 75,
-                    bearing: 30,
-                    duration: 1200,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-sky-600 cursor-pointer"
-            title="Jump to Nearest Bus Stop"
-          >
-            <Bus size={13} className="text-sky-600" />
-            <span>Bus Stop</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const grounds = (window as any).__playgrounds;
-              if (grounds && grounds.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__groundIdx || 0) % grounds.length;
-                  (window as any).__groundIdx = nextIdx + 1;
-                  const targetGround = grounds[nextIdx];
-                  map.flyTo({
-                    center: [targetGround.lng, targetGround.lat],
-                    zoom: 17.8,
-                    pitch: 75,
-                    bearing: 25,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-green-600 cursor-pointer"
-            title="Jump to Nearest Playground"
-          >
-            <Trophy size={13} className="text-green-600" />
-            <span>Playground</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__villageItems?.filter((i: any) => i.type === 'chayakada');
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__chayaIdx || 0) % items.length;
-                  (window as any).__chayaIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.5,
-                    pitch: 75,
-                    bearing: 35,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-amber-700 cursor-pointer"
-            title="Jump to Nearest Kerala Tea Shop (ചായക്കട)"
-          >
-            <Coffee size={13} className="text-amber-700" />
-            <span>ചായക്കട</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__villageItems?.filter(
-                (i: any) =>
-                  i.type === 'village_house' ||
-                  i.type === 'farm_plot' ||
-                  i.type === 'village_pond' ||
-                  i.type === 'canal_culvert' ||
-                  i.type === 'open_well' ||
-                  i.type === 'arecanut_grove' ||
-                  i.type === 'banana_grove' ||
-                  i.type === 'sacred_grove' ||
-                  i.type === 'laterite_cut' ||
-                  i.type === 'residential_parcel' ||
-                  i.type === 'paddy_parcel' ||
-                  i.type === 'coconut_plantation' ||
-                  i.type === 'rubber_shed' ||
-                  i.type === 'lotus_pond' ||
-                  i.type === 'stream_bridge' ||
-                  i.type === 'wetland_mangrove'
-              );
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__villageIdx || 0) % items.length;
-                  (window as any).__villageIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.5,
-                    pitch: 75,
-                    bearing: 25,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-800 cursor-pointer"
-            title="Jump to Nearest Kerala Village Element (ഓടിട്ട വീടുകൾ / കളപ്പുര / കുളം / കലുങ്ക്)"
-          >
-            <Home size={13} className="text-emerald-800" />
-            <span>ഗ്രാമം</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__villageItems?.filter(
-                (i: any) =>
-                  i.type === 'paddy_parcel' ||
-                  i.type === 'coconut_plantation' ||
-                  i.type === 'rubber_shed' ||
-                  i.type === 'banana_grove' ||
-                  i.type === 'arecanut_grove' ||
-                  i.type === 'lotus_pond' ||
-                  i.type === 'stream_bridge' ||
-                  i.type === 'wetland_mangrove' ||
-                  i.type === 'residential_parcel'
-              );
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__agriIdx || 0) % items.length;
-                  (window as any).__agriIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.5,
-                    pitch: 75,
-                    bearing: 25,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-green-700 cursor-pointer"
-            title="Jump to Nearest Kerala Landscape / Farm Plot (നെൽവയൽ / തോട്ടം / ചതുപ്പ് / റബ്ബർ പുര)"
-          >
-            <Sprout size={13} className="text-green-700" />
-            <span>പാടം / തോട്ടം</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__roadsideItems;
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__roadsideIdx || 0) % items.length;
-                  (window as any).__roadsideIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.6,
-                    pitch: 75,
-                    bearing: 30,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-amber-700 cursor-pointer"
-            title="Jump to Nearest Kerala Roadside Element (പോസ്റ്റ് / സ്ട്രീറ്റ് ലൈറ്റ് / ബോർഡ് / ഓട്ടോ സ്റ്റാൻഡ് / ബേക്കറി / ഫാർമസി / കലുങ്ക് / ഓട)"
-          >
-            <Store size={13} className="text-amber-700" />
-            <span>റോഡരികം</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__maritimeItems;
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__maritimeIdx || 0) % items.length;
-                  (window as any).__maritimeIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.2,
-                    pitch: 75,
-                    bearing: 20,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-blue-600 cursor-pointer"
-            title="Jump to Nearest Water Vessel (സ്പീഡ് ബോട്ട് / പട്രോൾ ബോട്ട് / കണ്ടെയ്നർ കപ്പൽ / അന്തർവാഹിനി / ക്രൂയിസ് കപ്പൽ / സെയ്‌ൽബോട്ട് / ഡിങ്കി / റോബോട്ട്)"
-          >
-            <Ship size={13} className="text-blue-600" />
-            <span>ബോട്ടുകൾ & കപ്പലുകൾ</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__villageItems?.filter((i: any) => i.type === 'temple' || i.type === 'church' || i.type === 'mosque');
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__worshipIdx || 0) % items.length;
-                  (window as any).__worshipIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.2,
-                    pitch: 75,
-                    bearing: 15,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-purple-600 cursor-pointer"
-            title="Jump to Nearest Temple / Church / Mosque"
-          >
-            <Landmark size={13} className="text-purple-600" />
-            <span>ക്ഷേത്രം / പള്ളി</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__highlandItems;
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__highlandIdx || 0) % items.length;
-                  (window as any).__highlandIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.0,
-                    pitch: 75,
-                    bearing: 45,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-700 cursor-pointer"
-            title="Jump to Nearest Highland Viewpoint / Checkpost"
-          >
-            <Mountain size={13} className="text-emerald-700" />
-            <span>മലയോരം</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__coastalItems;
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__coastalIdx || 0) % items.length;
-                  (window as any).__coastalIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.2,
-                    pitch: 75,
-                    bearing: 40,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-cyan-700 cursor-pointer"
-            title="Jump to Nearest Kerala Coastal Element (പുലിമുട്ട് / കടൽഭിത്തി / കുടിലുകൾ / ഹാർബർ)"
-          >
-            <Waves size={13} className="text-cyan-600" />
-            <span>തീരദേശം</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const items = (window as any).__urbanItems;
-              if (items && items.length > 0) {
-                const map = (window as any).__map;
-                if (map) {
-                  const nextIdx = ((window as any).__urbanIdx || 0) % items.length;
-                  (window as any).__urbanIdx = nextIdx + 1;
-                  const target = items[nextIdx];
-                  map.flyTo({
-                    center: [target.lng, target.lat],
-                    zoom: 18.2,
-                    pitch: 75,
-                    bearing: 35,
-                    duration: 1300,
-                  });
-                }
-              }
-            }}
-            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-indigo-600 cursor-pointer"
-            title="Jump to Nearest Kerala Urban Element (കടകൾ / മാൾ / ഹോസ്പിറ്റൽ / പാർക്കിംഗ് / സിഗ്നൽ)"
-          >
-            <Building2 size={13} className="text-indigo-600" />
-            <span>നഗരം</span>
-          </button>
-        </div>
       </div>
 
-      {/* Floating Right Side Controls (Compact on Mobile & Desktop) */}
-      <div className="absolute right-2.5 top-24 sm:top-28 z-20 flex flex-col items-center gap-1.5 sm:gap-2 pointer-events-auto">
-        {/* 3D / 2D Toggle Button */}
-        <button
-          onClick={handleToggle3D}
-          className="glass-pill-button px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-center gap-1 text-[11px] sm:text-xs font-black shadow-lg"
-          title="Toggle 3D View"
-        >
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${is3DMode ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
-            3D
-          </span>
-        </button>
-
-        {/* Performance Mode / Battery Saver Toggle (Auto-optimized for Budget Mobile) */}
-        <button
-          onClick={handleTogglePerformance}
-          className={`glass-pill-button px-2 py-1 sm:px-2.5 sm:py-1.5 flex items-center gap-1 text-[10px] sm:text-[11px] font-black shadow-lg transition-all ${
-            performanceTier === 'performance'
-              ? 'bg-amber-500 text-white ring-2 ring-amber-300'
-              : 'bg-white/90 text-gray-700'
-          }`}
-          title={
-            performanceTier === 'performance'
-              ? '⚡ പെർഫോമൻസ് മോഡ്: ബജറ്റ് ഫോണുകളിൽ ലാഗും ചൂടും ഇല്ലാതെ സ്മൂത്ത് 60 FPS (ക്വാളിറ്റി കൂട്ടാൻ ക്ലിക്ക് ചെയ്യുക)'
-              : '✨ ഹൈ ക്വാളിറ്റി മോഡ് (ബാറ്ററിയും വേഗതയും കൂട്ടാൻ പെർഫോമൻസ് മോഡിലേക്ക് മാറ്റുക)'
-          }
-        >
-          <span>{performanceTier === 'performance' ? '⚡ 60FPS' : '✨ HD'}</span>
-        </button>
-
-        {/* 3D Orbit Rotate Mode Toggle */}
-        <button
-          onClick={handleToggleRotateMode}
-          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center shadow-lg transition-all ${
-            isRotateMode ? 'bg-blue-500 text-white ring-2 ring-blue-300' : 'text-gray-700'
-          }`}
-          title={isRotateMode ? 'Rotate Mode: Drag screen to orbit 360°' : 'Click to enable 360° Rotate Mode'}
-        >
-          <RotateCw size={15} className={isRotateMode ? 'animate-spin' : ''} />
-        </button>
-
-        {/* Rotate Left 45° */}
-        <button
-          onClick={handleRotateLeft}
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
-          title="Rotate Left 45°"
-        >
-          <RotateCcw size={15} />
-        </button>
-
-        {/* Rotate Right 45° */}
-        <button
-          onClick={handleRotateRight}
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
-          title="Rotate Right 45°"
-        >
-          <RotateCw size={15} />
-        </button>
-
-        {/* Compass / Reset to North */}
-        <button
-          onClick={handleResetRotation}
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-red-500 shadow-lg"
-          title="Reset to North"
-        >
-          <Compass size={16} />
-        </button>
-
-        {/* Global Places / Search Button */}
-        <button
-          onClick={() => setIsSearchOpen(true)}
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
-          title="Search Global Location"
-        >
-          <Globe size={15} />
-        </button>
-
-        {/* Recenter to Avatar */}
-        <button
-          onClick={handleRecenter}
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-blue-600 shadow-lg"
-          title="Recenter on Avatar"
-        >
-          <Navigation size={15} className="fill-blue-500" />
-        </button>
-      </div>
-
-      {/* Floating Camera Widen & Quick-Turn Controls (Right Side) */}
-      <div className="absolute right-2.5 bottom-24 sm:bottom-28 z-20 flex flex-col items-center gap-2 pointer-events-auto">
-        {/* Quick Turn Buttons for Mobile Gamers */}
-        <div className="flex flex-col gap-1 bg-white/85 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80">
-          <button
-            onClick={handleRotateLeft}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:scale-90 font-bold text-sm"
-            title="Turn Camera Left (↶)"
-          >
-            ↶
-          </button>
-          <button
-            onClick={handleRotateRight}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:scale-90 font-bold text-sm"
-            title="Turn Camera Right (↷)"
-          >
-            ↷
-          </button>
-        </div>
-
+      {/* Floating Right Side Camera Controls: 2x, 5x, 10x, and Map */}
+      <div className="absolute right-3 top-24 sm:top-28 z-20 pointer-events-auto">
         <GamerCameraControls
           widenLevel={widenLevel}
           onWidenChange={handleWidenChange}
@@ -944,7 +389,7 @@ function App() {
       </div>
 
       {/* Floating Virtual Joystick & Drive Vehicle Controls for Mobile & Desktop */}
-      <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto flex items-end gap-2.5">
+      <div className="absolute bottom-6 sm:bottom-8 left-3 sm:left-5 z-30 pointer-events-auto flex items-end gap-2.5">
         <VirtualJoystick
           onMove={(dirX, dirZ, isMoving, dt, sUp) => {
             canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
@@ -955,7 +400,7 @@ function App() {
         {/* Drive / Exit Kerala Vehicle Button */}
         <button
           onClick={handleToggleDrive}
-          className={`flex items-center gap-2 px-3 py-2 rounded-2xl shadow-xl transition-all pointer-events-auto backdrop-blur-md active:scale-95 mb-1 ${
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl shadow-xl transition-all pointer-events-auto backdrop-blur-md active:scale-95 mb-2 ${
             isDriving
               ? 'bg-amber-500 hover:bg-amber-600 text-white border-2 border-amber-300 shadow-amber-500/30 ring-2 ring-amber-400/50'
               : 'bg-white/95 hover:bg-white text-gray-800 border border-gray-200/90 hover:shadow-2xl'
@@ -972,56 +417,6 @@ function App() {
             </span>
           </div>
         </button>
-      </div>
-
-      {/* Bottom Snapchat Bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none flex flex-col items-center pb-2">
-        {/* Rotate Mode notification if active */}
-        {isRotateMode && (
-          <div className="pointer-events-auto mb-2">
-            <button
-              onClick={handleToggleRotateMode}
-              className="glass-pill px-3 py-1 shadow-lg flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold"
-            >
-              <RotateCw size={13} className="animate-spin" />
-              <span>Rotate Active — Drag Screen</span>
-            </button>
-          </div>
-        )}
-
-        {/* Snapchat Native 5-Tab Bar */}
-        <div className="w-[94%] max-w-sm glass-panel py-2 px-6 flex items-center justify-between shadow-2xl pointer-events-auto rounded-3xl">
-          {/* Tab 1: Map (Active) */}
-          <button className="flex flex-col items-center text-blue-600">
-            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-              <MapPin size={18} className="fill-blue-500 text-blue-500" />
-            </div>
-          </button>
-
-          {/* Tab 2: Chat */}
-          <button className="relative flex flex-col items-center text-gray-600 hover:text-gray-900">
-            <MessageCircle size={22} />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-              4
-            </span>
-          </button>
-
-          {/* Tab 3: Camera Shutter Circle */}
-          <button className="w-12 h-12 rounded-full border-4 border-white bg-gray-100 shadow-md flex items-center justify-center hover:scale-105 transition-transform text-gray-800">
-            <Camera size={22} />
-          </button>
-
-          {/* Tab 4: Friends / Stories */}
-          <button className="relative flex flex-col items-center text-gray-600 hover:text-gray-900">
-            <Users size={22} />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full" />
-          </button>
-
-          {/* Tab 5: Spotlight */}
-          <button className="flex flex-col items-center text-gray-600 hover:text-gray-900">
-            <PlaySquare size={22} />
-          </button>
-        </div>
       </div>
     </div>
   );

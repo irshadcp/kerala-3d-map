@@ -45,6 +45,25 @@ export class RemotePlayerManager {
   public players = new Map<string, RemotePlayerInstance>();
   private audioContext: AudioContext | null = null;
   private pendingAudioStreams = new Map<string, MediaStream>();
+  private isDeafened = false;
+
+  public setDeafened(deafened: boolean) {
+    this.isDeafened = deafened;
+    if (deafened) {
+      for (const p of this.players.values()) {
+        if (p.audioElement) p.audioElement.volume = 0;
+        if (p.gainNode && this.audioContext) {
+          try {
+            p.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  public getIsDeafened(): boolean {
+    return this.isDeafened;
+  }
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -347,7 +366,7 @@ export class RemotePlayerManager {
       const maxAudibleDist = 45; // 45 meters audible threshold
 
       let targetGain = 0;
-      if (dist < maxAudibleDist && !player.data.isMuted) {
+      if (!this.isDeafened && dist < maxAudibleDist && !player.data.isMuted) {
         // Quadratic distance attenuation for realistic spatial sound
         targetGain = Math.pow(1 - dist / maxAudibleDist, 2);
       }
