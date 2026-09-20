@@ -6,14 +6,39 @@ import ThreeMapLayer from '../graphics/ThreeMapLayer';
 export type PerspectiveMode = 'tpp' | 'fpp';
 export type WidenLevel = '1x' | '2x' | '5x' | '10x';
 
-export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; label: string; desc: string }> = {
-  '1x': { zoom: 19.3, pitch: 80, label: '1x', desc: 'Close Behind Character' },
-  '2x': { zoom: 18.2, pitch: 74, label: '2x', desc: 'Wide TPP' },
-  '5x': { zoom: 16.6, pitch: 60, label: '5x', desc: 'High Drone' },
-  '10x': { zoom: 15.0, pitch: 48, label: '10x', desc: 'Tactical Overview' },
+export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; lookAhead: number; label: string; desc: string }> = {
+  '1x': { zoom: 22.0, pitch: 80, lookAhead: 4.5, label: '1x', desc: 'GTA/PUBG Close TPP' },
+  '2x': { zoom: 20.0, pitch: 75, lookAhead: 7.0, label: '2x', desc: 'Wide TPP' },
+  '5x': { zoom: 17.2, pitch: 62, lookAhead: 0, label: '5x', desc: 'High Drone' },
+  '10x': { zoom: 15.0, pitch: 48, lookAhead: 0, label: '10x', desc: 'Tactical Overview' },
 };
 
-export const FPP_CONFIG = { zoom: 19.8, pitch: 84, label: 'FPP', desc: 'First Person' };
+export const FPP_CONFIG = { zoom: 22.4, pitch: 84, lookAhead: 0, label: 'FPP', desc: 'First Person' };
+
+/**
+ * Computes lookahead target on the ground in front of the character.
+ * This positions the camera directly behind the character's shoulders,
+ * framing the character in the lower-third with the road ahead clearly visible (GTA / PUBG style).
+ */
+export const getTargetCenter = (
+  lat: number,
+  lng: number,
+  bearing: number,
+  widen: WidenLevel,
+  mode: PerspectiveMode
+): [number, number] => {
+  if (mode === 'fpp') {
+    return [lng, lat];
+  }
+  const lookAhead = WIDEN_CONFIG[widen]?.lookAhead || 0;
+  if (lookAhead <= 0) {
+    return [lng, lat];
+  }
+  const bRad = (bearing * Math.PI) / 180;
+  const dLat = (Math.cos(bRad) * lookAhead) / 111111;
+  const dLng = (Math.sin(bRad) * lookAhead) / (111111 * Math.cos((lat * Math.PI) / 180));
+  return [lng + dLng, lat + dLat];
+};
 
 export interface SnapMapCanvasRef {
   toggle3D: () => boolean;
@@ -69,12 +94,14 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         if (!map.current) return;
         const lat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
         const lng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+        const bearing = map.current.getBearing();
         const zoom = perspectiveRef.current === 'fpp' ? FPP_CONFIG.zoom : WIDEN_CONFIG[widenLevelRef.current].zoom;
         const pitch = is3DRef.current
           ? (perspectiveRef.current === 'fpp' ? FPP_CONFIG.pitch : WIDEN_CONFIG[widenLevelRef.current].pitch)
           : 0;
+        const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current, perspectiveRef.current);
         map.current.flyTo({
-          center: [lng, lat],
+          center: targetCenter,
           zoom,
           pitch,
           duration: 1000,
@@ -105,8 +132,13 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           threeLayer.current.setPerspective(mode);
         }
         if (!map.current) return;
+        const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
+        const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+        const bearing = map.current.getBearing();
+
         if (mode === 'fpp') {
           map.current.easeTo({
+            center: [pLng, pLat],
             zoom: FPP_CONFIG.zoom,
             pitch: FPP_CONFIG.pitch,
             duration: 600,
@@ -114,7 +146,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           });
         } else {
           const cfg = WIDEN_CONFIG[widenLevelRef.current];
+          const targetCenter = getTargetCenter(pLat, pLng, bearing, widenLevelRef.current, 'tpp');
           map.current.easeTo({
+            center: targetCenter,
             zoom: cfg.zoom,
             pitch: is3DRef.current ? cfg.pitch : 0,
             duration: 600,
@@ -131,8 +165,13 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           }
         }
         if (!map.current) return;
+        const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
+        const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+        const bearing = map.current.getBearing();
         const cfg = WIDEN_CONFIG[level];
+        const targetCenter = getTargetCenter(pLat, pLng, bearing, level, 'tpp');
         map.current.easeTo({
+          center: targetCenter,
           zoom: cfg.zoom,
           pitch: is3DRef.current ? cfg.pitch : 0,
           duration: 600,
@@ -182,8 +221,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               }
             }
 
+            const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current, perspectiveRef.current);
             map.current.jumpTo({
-              center: [pLng, pLat],
+              center: targetCenter,
               bearing: newBearing,
             });
           }
@@ -233,8 +273,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
             const turnRate = perspectiveRef.current === 'fpp' ? 0.08 : 0.045;
             const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnRate + 360) % 360 : currentBearing;
+            const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current, perspectiveRef.current);
             map.current.jumpTo({
-              center: [pLng, pLat],
+              center: targetCenter,
               bearing: newBearing,
             });
           }
@@ -251,17 +292,18 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       if (!map.current) {
         playerCoordsRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
         const initCfg = WIDEN_CONFIG[widenLevelRef.current];
+        const initCenter = getTargetCenter(currentLocation.lat, currentLocation.lng, 0, widenLevelRef.current, perspectiveRef.current);
 
         const mapInstance = new maplibregl.Map({
           container: mapContainer.current,
           style: '/pastel-style.json',
-          center: [currentLocation.lng, currentLocation.lat],
+          center: initCenter,
           zoom: initCfg.zoom,
           pitch: initCfg.pitch,
           bearing: 0,
           maxPitch: 85,
           minPitch: 0,
-          maxZoom: 20,
+          maxZoom: 24,
           minZoom: 10,
           dragRotate: true,
           pitchWithRotate: true,
@@ -386,9 +428,11 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const pitch = is3DRef.current
           ? (perspectiveRef.current === 'fpp' ? FPP_CONFIG.pitch : WIDEN_CONFIG[widenLevelRef.current].pitch)
           : 0;
+        const bearing = map.current.getBearing();
+        const targetCenter = getTargetCenter(currentLocation.lat, currentLocation.lng, bearing, widenLevelRef.current, perspectiveRef.current);
 
         map.current.flyTo({
-          center: [currentLocation.lng, currentLocation.lat],
+          center: targetCenter,
           zoom,
           pitch,
           duration: 1600,

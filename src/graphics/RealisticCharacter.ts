@@ -26,8 +26,10 @@ export class RealisticCharacter {
   private animPhase = 0;
   private currentHeading = 0;
   private targetHeading = 0;
+  private scale = 1.0;
 
   constructor(scale = 1.0) {
+    this.scale = scale;
     this.group = new THREE.Group();
     this.group.name = 'realistic_kerala_character';
 
@@ -272,11 +274,11 @@ export class RealisticCharacter {
       this.torso.rotation.y = swing * 0.12;
 
       // Walking vertical bobbing (bounce)
-      const bounce = Math.abs(cosSwing) * 0.08;
-      this.torso.position.y = (1.35 + bounce);
+      const bounce = Math.abs(cosSwing) * 0.08 * this.scale;
+      this.torso.position.y = 1.35 * this.scale + bounce;
 
       // Shadow pulsates with stride
-      this.shadowMesh.scale.setScalar(1.0 - bounce * 0.5);
+      this.shadowMesh.scale.setScalar(this.scale * (1.0 - Math.abs(cosSwing) * 0.05));
     } else {
       // Idle Breathing Animation
       this.animPhase += delta * 2.2;
@@ -290,8 +292,8 @@ export class RealisticCharacter {
       this.torso.rotation.y *= 0.85;
 
       // Gentle chest rise & fall
-      this.torso.position.y = 1.35 + breath * 0.02;
-      this.shadowMesh.scale.setScalar(1.0);
+      this.torso.position.y = 1.35 * this.scale + breath * 0.02 * this.scale;
+      this.shadowMesh.scale.setScalar(this.scale);
     }
   }
 

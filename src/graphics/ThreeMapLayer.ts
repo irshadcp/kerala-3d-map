@@ -104,7 +104,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     // Grounded Realistic 3D Human Character (Deleted old floating pin badge)
     this.playerAvatarGroup = new THREE.Group();
-    this.character = new RealisticCharacter();
+    this.character = new RealisticCharacter(1.35);
     this.playerAvatarGroup.add(this.character.group);
 
     this.scene.add(this.playerAvatarGroup);
