@@ -56,12 +56,30 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public currentPos = new THREE.Vector2(0, 0);
   public targetPos = new THREE.Vector2(0, 0);
   public isWalking = false;
+  private pathStuckCount = 0;
   private lastFrameTime = performance.now();
   private lastChunkCheckX = 0;
   private lastChunkCheckZ = 0;
   private loadedChunks = new Map<string, THREE.Group>();
   private readonly CHUNK_SIZE = 150;
   private readonly LOAD_RADIUS = 450;
+
+  // Steering & obstacle avoidance offsets:
+  // Evaluates direct (0°), then leftward deviations (+30°, +45°, +60°, +90°, +120°),
+  // then rightward deviations (-30°, -45°, -60°, -90°, -120°)
+  private readonly AVOIDANCE_ANGLES = [
+    0,
+    Math.PI / 6,
+    Math.PI / 4,
+    Math.PI / 3,
+    Math.PI / 2,
+    (2 * Math.PI) / 3,
+    -Math.PI / 6,
+    -Math.PI / 4,
+    -Math.PI / 3,
+    -Math.PI / 2,
+    -(2 * Math.PI) / 3,
+  ];
 
   // Pre-allocated matrices for render loop
   private _m = new THREE.Matrix4();
@@ -211,6 +229,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
   }
 
+  public isPositionBlocked(px: number, pz: number): boolean {
+    if (!this.obstacleMap.isReady) return false;
+    return (
+      this.obstacleMap.isBuildingCollision(px, pz, 0.45, 0.45, 0) ||
+      this.obstacleMap.isPointInWater(px, pz, 0.5)
+    );
+  }
+
   public moveInDirection(dirX: number, dirZ: number, delta: number) {
     if (!this.character || !this.playerAvatarGroup) return;
 
@@ -221,10 +247,17 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     const nextX = this.currentPos.x + stepX;
     const nextZ = this.currentPos.y + stepZ;
 
-    // Zero Building Collision: Ensure character cannot walk through solid building walls
-    if (!this.obstacleMap.isBuildingCollision(nextX, nextZ, 0.45, 0.45, 0)) {
+    // Obstacle collision check with smooth wall-sliding along free axes
+    if (!this.isPositionBlocked(nextX, nextZ)) {
       this.currentPos.x = nextX;
       this.currentPos.y = nextZ;
+    } else {
+      // Wall sliding: if moving diagonally into an obstacle, slide along X or Z
+      if (!this.isPositionBlocked(nextX, this.currentPos.y)) {
+        this.currentPos.x = nextX;
+      } else if (!this.isPositionBlocked(this.currentPos.x, nextZ)) {
+        this.currentPos.y = nextZ;
+      }
     }
     this.targetPos.copy(this.currentPos);
 
@@ -359,37 +392,75 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       const dist = this.currentPos.distanceTo(this.targetPos);
       if (dist > 0.25) {
         this.isWalking = true;
-        const dirX = (this.targetPos.x - this.currentPos.x) / dist;
-        const dirZ = (this.targetPos.y - this.currentPos.y) / dist;
+        const baseDirX = (this.targetPos.x - this.currentPos.x) / dist;
+        const baseDirZ = (this.targetPos.y - this.currentPos.y) / dist;
         const moveStep = Math.min(dist, 9.5 * delta);
+        const baseAngle = Math.atan2(baseDirX, baseDirZ);
 
-        const nextX = this.currentPos.x + dirX * moveStep;
-        const nextZ = this.currentPos.y + dirZ * moveStep;
-
-        if (!this.obstacleMap.isBuildingCollision(nextX, nextZ, 0.45, 0.45, 0)) {
-          this.currentPos.x = nextX;
-          this.currentPos.y = nextZ;
-        } else {
+        // If very close to destination and target is inside an obstacle/building, mark arrived
+        if (dist < 1.2 && this.isPositionBlocked(this.targetPos.x, this.targetPos.y)) {
           this.targetPos.copy(this.currentPos);
-        }
+          this.isWalking = false;
+          this.pathStuckCount = 0;
+          this.character.update(delta, false, 1.0);
+        } else {
+          let moved = false;
+          let chosenX = this.currentPos.x;
+          let chosenZ = this.currentPos.y;
+          let chosenHeading = baseAngle;
 
-        this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
+          // Try direct path first (0°), then leftward deviations (+30°, +45°, +60°, +90°, +120°),
+          // then rightward deviations (-30°, -45°, -60°, -90°, -120°)
+          for (const offset of this.AVOIDANCE_ANGLES) {
+            const testAngle = baseAngle + offset;
+            const testDirX = Math.sin(testAngle);
+            const testDirZ = Math.cos(testAngle);
+            const stepDist = offset === 0 ? moveStep : moveStep * 0.85;
 
-        const heading = Math.atan2(dirX, dirZ);
-        this.character.setHeading(heading);
-        this.character.update(delta, true, 1.25);
+            const testX = this.currentPos.x + testDirX * stepDist;
+            const testZ = this.currentPos.y + testDirZ * stepDist;
 
-        const coords = GeoCoords.toLatLng(this.currentPos.x, this.currentPos.y, this.originLat, this.originLng);
-        this.playerLat = coords.lat;
-        this.playerLng = coords.lng;
+            if (!this.isPositionBlocked(testX, testZ)) {
+              chosenX = testX;
+              chosenZ = testZ;
+              chosenHeading = testAngle;
+              moved = true;
+              break;
+            }
+          }
 
-        if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
-          this.lastChunkCheckX = this.currentPos.x;
-          this.lastChunkCheckZ = this.currentPos.y;
-          this.updateChunks(this.currentPos.x, this.currentPos.y);
+          if (moved) {
+            this.currentPos.x = chosenX;
+            this.currentPos.y = chosenZ;
+            this.pathStuckCount = 0;
+
+            this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
+
+            this.character.setHeading(chosenHeading);
+            this.character.update(delta, true, 1.25);
+
+            const coords = GeoCoords.toLatLng(this.currentPos.x, this.currentPos.y, this.originLat, this.originLng);
+            this.playerLat = coords.lat;
+            this.playerLng = coords.lng;
+
+            if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
+              this.lastChunkCheckX = this.currentPos.x;
+              this.lastChunkCheckZ = this.currentPos.y;
+              this.updateChunks(this.currentPos.x, this.currentPos.y);
+            }
+          } else {
+            // Trapped against a solid barrier with no clear angle
+            this.pathStuckCount++;
+            if (this.pathStuckCount > 35) {
+              this.targetPos.copy(this.currentPos);
+              this.pathStuckCount = 0;
+            }
+            this.character.update(delta, false, 1.0);
+          }
         }
       } else {
         this.isWalking = false;
+        this.pathStuckCount = 0;
         this.character.update(delta, false, 1.0);
       }
     }

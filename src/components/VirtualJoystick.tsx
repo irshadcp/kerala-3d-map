@@ -26,13 +26,16 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       const cosB = Math.cos(bearing);
       const sinB = Math.sin(bearing);
 
-      // vx is screen right (+X), vy is screen down (+Y, which means backward)
-      // Screen up (-vy) is world forward (-Z in Three.js or adjusted by bearing)
-      const forward = -vy;
-      const right = vx;
+      // vx is screen right (+1 for right), vy is screen down (+1 for down, -1 for up/forward)
+      const sUp = -vy;
+      const sRight = vx;
 
-      const worldX = right * cosB + forward * sinB;
-      const worldZ = -right * sinB + forward * cosB;
+      // In world coordinates: East is +X, North is -Z
+      // When bearing = 0 (North is UP on screen):
+      // sUp (+1) moves North (worldX = 0, worldZ = -1)
+      // sRight (+1) moves East (worldX = +1, worldZ = 0)
+      const worldX = sRight * cosB + sUp * sinB;
+      const worldZ = sRight * sinB - sUp * cosB;
 
       onMove(worldX, worldZ, true);
     }

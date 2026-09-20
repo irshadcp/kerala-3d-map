@@ -45,8 +45,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       },
       recenter: () => {
         if (!map.current) return;
+        const lat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
+        const lng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
         map.current.flyTo({
-          center: [playerCoordsRef.current.lng, playerCoordsRef.current.lat],
+          center: [lng, lat],
           zoom: 17,
           pitch: is3DRef.current ? 48 : 0,
           duration: 1000,
@@ -80,9 +82,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Smoothly pan camera to follow character
+          // Buttery-smooth camera tracking locked to character movement
           if (map.current) {
-            map.current.panTo([pLng, pLat], { duration: 120, easing: (t) => t });
+            map.current.jumpTo({ center: [pLng, pLat] });
           }
           if (onPlayerMove) {
             onPlayerMove(pLat, pLng);
