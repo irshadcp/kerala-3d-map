@@ -516,12 +516,16 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
 
       // High-performance spatial distance-gated synchronization:
-      // Only resync map vector features when player moves > 85m or on 4s idle throttle,
+      // Only resync map vector features when player moves > 85m or on 1.5s idle throttle,
       // eliminating recurring 400ms frame drops and keeping render loop silky smooth at 60fps!
       const distFromLastSync = Math.hypot(pPos.x - this.lastSyncX, pPos.z - this.lastSyncZ);
       this.syncTimer += delta;
 
-      if (distFromLastSync > 85 || this.syncTimer >= 4.0) {
+      // Force rapid sync at startup when map is empty, then throttle to 1.5s
+      const isStartup = this.realBuildingManager.roadGraph.segments.size === 0;
+      const throttleLimit = isStartup ? 0.2 : 1.5;
+
+      if (distFromLastSync > 85 || this.syncTimer >= throttleLimit) {
         this.syncTimer = 0;
         this.lastSyncX = pPos.x;
         this.lastSyncZ = pPos.z;
