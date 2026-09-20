@@ -72,7 +72,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private lastChunkCheckZ = 0;
   private loadedChunks = new Map<string, THREE.Group>();
   private readonly CHUNK_SIZE = 150;
-  private readonly LOAD_RADIUS = 450;
+  private readonly LOAD_RADIUS = 180; // 180m radius keeps mobile lightweight and cool
+  private lastRegenX = -9999;
+  private lastRegenZ = -9999;
 
   // Pre-allocated matrices for render loop
   private _m = new THREE.Matrix4();
@@ -159,6 +161,13 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         if (!this.is3DActive) return;
         if (this.map && this.map.getZoom() < 16.2) return;
 
+        const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+        const distFromLast = Math.hypot(local.x - this.lastRegenX, local.z - this.lastRegenZ);
+        if (this.lastRegenX !== -9999 && distFromLast < 50) return;
+
+        this.lastRegenX = local.x;
+        this.lastRegenZ = local.z;
+
         const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
         if (refreshed) {
           // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
@@ -219,7 +228,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           // 11. Generate ultra-lightweight windows, doors, and shutters on building blocks
           this.buildingFacadeManager.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z, true);
         }
-      }, 150);
+      }, 450);
     };
 
     map.on('idle', reloadObstaclesAndRegenerate);
@@ -364,11 +373,13 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (this.isDrivingState) {
       this.playerVehicle.setPosition(0, 0, 0);
       this.playerVehicle.setHeading(this.character.getHeading());
-      this.character.group.position.set(0, 0.25, 0.1);
-      this.character.group.scale.set(1.15, 1.15, 1.15);
+      // Player is inside the auto: hide outer walking character model
+      this.character.group.visible = false;
     } else {
       this.playerVehicle.setPosition(2.4, 0, 0);
       this.playerVehicle.setHeading(0);
+      // Player steps out on foot
+      this.character.group.visible = true;
       this.character.group.position.set(0, 0, 0);
       this.character.group.scale.set(1.5, 1.5, 1.5);
     }
@@ -707,17 +718,21 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.renderer.render(this.scene, this.camera);
 
     // Thermal & Battery Optimization:
-    // Only repaint every frame if character is actively walking or multiplayer peers moving
-    if (this.isWalking || (this.remotePlayerManager && this.remotePlayerManager.getPlayerCount() > 0)) {
+    // Only repaint continuous 60 FPS if character is actively moving or nearby peer (< 80m) is moving
+    const hasNearbyMovingPeer =
+      this.remotePlayerManager &&
+      this.remotePlayerManager.hasMovingNearbyPlayer(this.currentPos.x, this.currentPos.y, 80);
+
+    if (this.isWalking || hasNearbyMovingPeer) {
       this.map.triggerRepaint();
     } else if (this.is3DActive) {
-      // In 3D mode when idle, cap gentle animation tick (~25 FPS) for water waves / breathing
+      // In 3D mode when idle, throttle gentle animation tick (~15 FPS) for breathing
       if (!this._idleRepaintScheduled) {
         this._idleRepaintScheduled = true;
         setTimeout(() => {
           this._idleRepaintScheduled = false;
           if (this.map) this.map.triggerRepaint();
-        }, 40);
+        }, 65);
       }
     }
     // In 2D overview mode (zoom < 16.2): ZERO idle repaints! GPU stays completely cold!

@@ -61,6 +61,16 @@ export class RemotePlayerManager {
     return Array.from(this.players.values()).map((p) => ({ ...p.data }));
   }
 
+  public hasMovingNearbyPlayer(localX: number, localZ: number, thresholdDist = 80): boolean {
+    for (const player of this.players.values()) {
+      if (player.data.isWalking) {
+        const dist = Math.hypot(player.currentPos.x - localX, player.currentPos.y - localZ);
+        if (dist <= thresholdDist) return true;
+      }
+    }
+    return false;
+  }
+
   public updatePlayer(
     data: RemotePlayerData,
     originLat: number,
@@ -243,12 +253,12 @@ export class RemotePlayerManager {
 
       // Vehicle & Driving Posture
       if (player.data.isDriving) {
-        player.character.group.position.set(0, 0.25, 0.1);
-        player.character.group.scale.set(1.15, 1.15, 1.15);
+        player.character.group.visible = false; // Inside auto
         player.vehicle.setPosition(0, 0, 0);
         player.vehicle.setHeading(player.currentHeading);
         player.vehicle.update(delta, true, player.data.isWalking, 2.5);
       } else {
+        player.character.group.visible = true; // On foot
         player.character.group.position.set(0, 0, 0);
         player.character.group.scale.set(1.5, 1.5, 1.5);
         player.vehicle.setPosition(2.2, 0, 0);

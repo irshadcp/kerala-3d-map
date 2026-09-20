@@ -176,34 +176,28 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         isTeleportingRef.current = true;
         playerCoordsRef.current = { lat, lng };
 
+        // Always lock into 2x 3D View (zoom: 20.6, pitch: 68) when going to a player!
+        widenLevelRef.current = '2x';
         is3DRef.current = true;
         threeLayer.current.set3DMode(true);
         threeLayer.current.setOrigin(lat, lng);
         threeLayer.current.updatePlayerPosition(lat, lng, true);
 
-        const zoom = 18.2;
-        const targetPitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
+        const cfg = WIDEN_CONFIG['2x'];
         const bearing = map.current.getBearing();
-        const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current);
+        const targetCenter = getTargetCenter(lat, lng, bearing, '2x');
 
-        map.current.flyTo({
+        // Instant snappy jump directly to the player's side in full 2x 3D view
+        map.current.jumpTo({
           center: targetCenter,
-          zoom,
-          pitch: targetPitch,
-          duration: 1200,
-          essential: true,
+          zoom: cfg.zoom,
+          pitch: cfg.pitch,
+          bearing,
         });
 
-        map.current.once('moveend', () => {
-          isTeleportingRef.current = false;
-          if (map.current) {
-            map.current.setPitch(targetPitch);
-          }
-          if (threeLayer.current) {
-            threeLayer.current.set3DMode(true);
-            threeLayer.current.updatePlayerPosition(lat, lng, true);
-          }
-        });
+        isTeleportingRef.current = false;
+        threeLayer.current.updatePlayerPosition(lat, lng, true);
+        map.current.triggerRepaint();
       },
       moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, _sUp?: number) => {
         if (!threeLayer.current) return;
@@ -350,13 +344,14 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           pitchWithRotate: true,
           touchZoomRotate: true,
           touchPitch: true,
+          fadeDuration: 0, // Zero tile fade tweening for maximum 60fps mobile speed
+          dragPan: false, // In 3D mode, swipe rotates camera; enabled in 2D mode
         });
 
         map.current = mapInstance;
         (window as any).__map = mapInstance;
 
         // Manual rotation / drag listeners to prevent chase camera fighting user gesture
-        // Check e.originalEvent so programmatic jumpTo calls never trigger manual interaction flags!
         const setManualInteraction = (val: boolean) => {
           isManualInteractingRef.current = val;
           (window as any).__isManualRotating = val;
@@ -397,6 +392,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           if (!isCloseEnoughFor3D && is3DRef.current) {
             is3DRef.current = false;
             threeLayer.current?.set3DMode(false);
+            map.current.dragPan.enable(); // Enable full Kerala map pan in 2D
             map.current.easeTo({
               pitch: 0,
               duration: 350,
@@ -404,6 +400,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           } else if (isCloseEnoughFor3D && !is3DRef.current) {
             is3DRef.current = true;
             threeLayer.current?.set3DMode(true);
+            map.current.dragPan.disable(); // In 3D mode, swipe rotates camera around character
             const targetPitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
             map.current.easeTo({
               pitch: targetPitch,
@@ -415,7 +412,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         mapInstance.on('zoom', checkZoomAndMode);
         mapInstance.on('zoomend', checkZoomAndMode);
 
-        // Tap or click to walk/move avatar (when not in rotate mode)
+        // Tap or click to walk/move avatar
         mapInstance.on('click', (e) => {
           if (!mapInstance || !threeLayer.current || isRotateModeRef.current) return;
 
@@ -427,11 +424,11 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
           if (onPlayerMove) {
             const heading = threeLayer.current.character.getHeading();
-            onPlayerMove(lat, lng, heading, true);
+            onPlayerMove(lat, lng, heading, true, threeLayer.current.isDriving());
           }
         });
 
-        // 3D Rotate gesture handling when Rotate Mode is active
+        // Mobile & Desktop Swipe-to-Rotate Look-Around in 3D
         let isRotating = false;
         let startX = 0;
         let startY = 0;
@@ -441,38 +438,51 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const container = mapContainer.current;
 
         const onPointerDown = (e: PointerEvent) => {
-          if (!isRotateModeRef.current || !map.current) return;
+          if (!map.current || !is3DRef.current) return;
+          // Ignore if pointer is inside the bottom-left joystick area
+          const isJoystickZone = e.clientX < 165 && e.clientY > window.innerHeight - 230;
+          if (isJoystickZone) return;
+
           isRotating = true;
           setManualInteraction(true);
           startX = e.clientX;
           startY = e.clientY;
           startBearing = map.current.getBearing();
           startPitch = map.current.getPitch();
-          container.setPointerCapture(e.pointerId);
-          e.stopPropagation();
+          try {
+            container.setPointerCapture(e.pointerId);
+          } catch (_) {}
         };
 
         const onPointerMove = (e: PointerEvent) => {
-          if (!isRotating || !map.current) return;
+          if (!isRotating || !map.current || !is3DRef.current) return;
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
-          const newBearing = (startBearing + dx * 0.45) % 360;
-          const newPitch = Math.max(0, Math.min(85, startPitch - dy * 0.35));
+
+          // Touch sensitivity tuned for natural thumb swiping
+          const newBearing = (startBearing - dx * 0.45 + 360) % 360;
+          const newPitch = Math.max(25, Math.min(80, startPitch - dy * 0.30));
+
+          const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
+          const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+          const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current);
+
           map.current.jumpTo({
+            center: targetCenter,
             bearing: newBearing,
             pitch: newPitch,
           });
-          e.stopPropagation();
         };
 
         const onPointerUp = (e: PointerEvent) => {
           if (!isRotating) return;
           isRotating = false;
-          setManualInteraction(false);
+          setTimeout(() => {
+            setManualInteraction(false);
+          }, 150);
           try {
             container.releasePointerCapture(e.pointerId);
           } catch (_) {}
-          e.stopPropagation();
         };
 
         container.addEventListener('pointerdown', onPointerDown, { capture: true });

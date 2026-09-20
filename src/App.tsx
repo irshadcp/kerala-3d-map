@@ -278,7 +278,10 @@ function App() {
     const spawnLat = lat + 0.000015;
     const spawnLng = lng + 0.000015;
 
-    // 1. Teleport 3D character, chunks, and camera
+    // Always lock into 2x 3D View
+    setWidenLevel('2x');
+
+    // 1. Instant 2x 3D teleportation
     canvasRef.current?.teleportToLocation(spawnLat, spawnLng);
 
     // 2. Update currentLocation state in App
@@ -288,15 +291,15 @@ function App() {
       subname: 'Kerala, India',
       lat: spawnLat,
       lng: spawnLng,
-      zoom: 18.2,
-      pitch: 75,
+      zoom: 20.6,
+      pitch: 68,
       bearing: 0,
       weather: 'Sunny',
       temp: '28°C',
     });
 
     // 3. Immediately notify all peers across WebRTC of new coordinates
-    multiplayerRef.current?.updateLocalTransform(spawnLat, spawnLng, 0, false);
+    multiplayerRef.current?.updateLocalTransform(spawnLat, spawnLng, 0, false, isDriving);
   };
 
   return (
@@ -865,8 +868,26 @@ function App() {
         </button>
       </div>
 
-      {/* Floating Camera Widen Controls (Right Side: 2x, 5x, 10x) */}
-      <div className="absolute right-2.5 bottom-24 sm:bottom-28 z-20 flex flex-col items-center pointer-events-auto">
+      {/* Floating Camera Widen & Quick-Turn Controls (Right Side) */}
+      <div className="absolute right-2.5 bottom-24 sm:bottom-28 z-20 flex flex-col items-center gap-2 pointer-events-auto">
+        {/* Quick Turn Buttons for Mobile Gamers */}
+        <div className="flex flex-col gap-1 bg-white/85 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-gray-200/80">
+          <button
+            onClick={handleRotateLeft}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:scale-90 font-bold text-sm"
+            title="Turn Camera Left (↶)"
+          >
+            ↶
+          </button>
+          <button
+            onClick={handleRotateRight}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:scale-90 font-bold text-sm"
+            title="Turn Camera Right (↷)"
+          >
+            ↷
+          </button>
+        </div>
+
         <GamerCameraControls
           widenLevel={widenLevel}
           onWidenChange={handleWidenChange}
