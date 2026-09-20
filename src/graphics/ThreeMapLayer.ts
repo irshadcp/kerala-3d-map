@@ -15,7 +15,7 @@ import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
 import { PlayerVehicle } from './PlayerVehicle';
-import { BuildingFacadeManager } from './BuildingFacadeManager';
+import { BuildingLODManager } from './BuildingLODManager';
 import { RemotePlayerManager } from './RemotePlayerManager';
 import { PlayerNameplate } from './PlayerNameplate';
 
@@ -39,7 +39,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private urbanManager!: KeralaUrbanManager;
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
-  private buildingFacadeManager!: BuildingFacadeManager;
+  private buildingLODManager!: BuildingLODManager;
   public playerVehicle!: PlayerVehicle;
   public isDrivingState: boolean = false;
   public remotePlayerManager!: RemotePlayerManager;
@@ -118,6 +118,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     topSunLight.position.set(50, 300, 50);
     this.scene.add(topSunLight);
 
+    // Subtle atmospheric distance depth fog matching Kerala pastel background
+    this.scene.fog = new THREE.Fog(0xe4f3de, 70, 240);
+
     // Grounded Realistic 3D Human Character (Deleted old floating pin badge)
     this.playerAvatarGroup = new THREE.Group();
     this.character = new RealisticCharacter(1.35);
@@ -155,7 +158,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.urbanManager = new KeralaUrbanManager(envGroup);
     this.coastalManager = new KeralaCoastalManager(envGroup);
     this.roadsideManager = new KeralaRoadsideManager(envGroup);
-    this.buildingFacadeManager = new BuildingFacadeManager(envGroup);
+    this.buildingLODManager = new BuildingLODManager(this.scene);
     this.remotePlayerManager = new RemotePlayerManager(this.scene);
 
     if (typeof window !== 'undefined') {
@@ -239,8 +242,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
           this.updateChunks(local.x, local.z);
 
-          // 11. Generate ultra-lightweight windows, doors, and shutters on building blocks
-          this.buildingFacadeManager.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z, true);
+          // 11. Dynamic Proximity Building LOD: generate rich roof parapet & ground AO plinths for nearby buildings
+          this.buildingLODManager.update(this.obstacleMap, local.x, local.z, true);
         }
       }, 450);
     };
@@ -272,7 +275,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       if (this.playerAvatarGroup) {
         this.playerAvatarGroup.position.set(local.x, 0, local.z);
         this.updateChunks(local.x, local.z);
-        this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z);
+        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z);
       }
     }
   }
@@ -422,7 +425,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.urbanManager?.clear();
     this.coastalManager?.clear();
     this.roadsideManager?.clear();
-    this.buildingFacadeManager?.clear();
+    this.buildingLODManager?.clear();
     this.remotePlayerManager?.onOriginChange(lat, lng);
 
     for (const group of this.loadedChunks.values()) {
@@ -512,6 +515,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.loadedChunks.delete(key);
       }
     }
+
+    // Dynamic Distance-based Building LOD
+    this.buildingLODManager?.update(this.obstacleMap, playerX, playerZ);
   }
 
   public updateTapMovement(delta: number): boolean {
@@ -662,8 +668,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.lastChunkCheckX = this.currentPos.x;
         this.lastChunkCheckZ = this.currentPos.y;
         this.updateChunks(this.currentPos.x, this.currentPos.y);
-        this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, this.currentPos.x, this.currentPos.y);
       }
+      this.buildingLODManager?.update(this.obstacleMap, this.currentPos.x, this.currentPos.y);
       return true;
     }
     return false;
@@ -771,9 +777,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (is3D) {
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
-      this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z);
+      this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true);
       this.map?.triggerRepaint();
     } else {
+      this.buildingLODManager?.clear();
       this.map?.triggerRepaint();
     }
   }
@@ -783,6 +790,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.isLowEndMode = isLowEnd;
     this.LOAD_RADIUS = isLowEnd ? 120 : 180;
     SnapTreeGenerator.setLowEndMode(isLowEnd);
+    this.buildingLODManager?.setPerformanceMode(isLowEnd);
 
     // Refresh chunks with new LOD & radius if 3D is active
     if (this.is3DActive) {
