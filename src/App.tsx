@@ -27,7 +27,8 @@ import {
   Coffee,
   Ship,
   Landmark,
-  Mountain
+  Mountain,
+  Waves
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -408,6 +409,32 @@ function App() {
           >
             <Mountain size={13} className="text-emerald-700" />
             <span>മലയോരം</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__coastalItems;
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__coastalIdx || 0) % items.length;
+                  (window as any).__coastalIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.2,
+                    pitch: 56,
+                    bearing: 40,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-cyan-700 cursor-pointer"
+            title="Jump to Nearest Kerala Coastal Element (പുലിമുട്ട് / കടൽഭിത്തി / കുടിലുകൾ / ഹാർബർ)"
+          >
+            <Waves size={13} className="text-cyan-600" />
+            <span>തീരദേശം</span>
           </button>
         </div>
       </div>

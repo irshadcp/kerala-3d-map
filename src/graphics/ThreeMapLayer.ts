@@ -11,6 +11,7 @@ import { KeralaVillageManager } from './KeralaVillageManager';
 import { KeralaMaritimeManager } from './KeralaMaritimeManager';
 import { KeralaHighlandManager } from './KeralaHighlandManager';
 import { KeralaUrbanManager } from './KeralaUrbanManager';
+import { KeralaCoastalManager } from './KeralaCoastalManager';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -30,6 +31,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private maritimeManager!: KeralaMaritimeManager;
   private highlandManager!: KeralaHighlandManager;
   private urbanManager!: KeralaUrbanManager;
+  private coastalManager!: KeralaCoastalManager;
 
   private originLat: number;
   private originLng: number;
@@ -164,6 +166,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.maritimeManager = new KeralaMaritimeManager(this.scene);
     this.highlandManager = new KeralaHighlandManager(this.scene);
     this.urbanManager = new KeralaUrbanManager(this.scene);
+    this.coastalManager = new KeralaCoastalManager(this.scene);
 
     this.updateModelTransform(this.originLat, this.originLng);
     
@@ -192,6 +195,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         // 7. Place Kerala Urban elements (Traffic signals, Highway Billboards)
         this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng);
 
+        // 8. Place Kerala Coastal elements (Seawalls, Breakwaters, Fishing Houses, Drying Racks, Harbours)
+        this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng);
+
         // Expose placed landmarks globally for UI navigation and inspection
         if (typeof window !== 'undefined') {
           (window as any).__petrolStations = this.petrolStationManager.placedStations;
@@ -201,9 +207,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           (window as any).__maritimeItems = this.maritimeManager.placedItems;
           (window as any).__highlandItems = this.highlandManager.placedItems;
           (window as any).__urbanItems = this.urbanManager.placedItems;
+          (window as any).__coastalItems = this.coastalManager.placedItems;
         }
 
-        // 8. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
+        // 9. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
         for (const group of this.loadedChunks.values()) {
           this.scene.remove(group);
           group.traverse((child) => {
@@ -259,6 +266,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.maritimeManager?.clear();
     this.highlandManager?.clear();
     this.urbanManager?.clear();
+    this.coastalManager?.clear();
 
     for (const group of this.loadedChunks.values()) {
       this.scene.remove(group);

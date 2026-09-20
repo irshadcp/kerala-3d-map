@@ -15,7 +15,12 @@ export type KeralaAssetType =
   | 'forest_checkpost'
   | 'viewpoint'
   | 'traffic_signal'
-  | 'billboard';
+  | 'billboard'
+  | 'seawall'
+  | 'breakwater'
+  | 'fishing_house'
+  | 'net_drying_rack'
+  | 'harbour_complex';
 
 export interface ZoneProfile {
   type: KeralaZoneType;
@@ -42,6 +47,10 @@ export interface ZoneProfile {
     checkpost?: number;
     trafficSignal?: number;
     billboard?: number;
+    seawall?: number;
+    breakwater?: number;
+    fishingHouse?: number;
+    harbour?: number;
   };
 }
 
@@ -145,6 +154,11 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'fish_market',
       'boat_jetty',
       'worship_place',
+      'seawall',
+      'breakwater',
+      'fishing_house',
+      'net_drying_rack',
+      'harbour_complex',
     ],
     treeProfile: {
       baseDensity: 15,
@@ -156,8 +170,11 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       busStop: 400,
       playground: 1200,
       chayakada: 320,
-      boatJetty: 500,
+      boatJetty: 450,
       worshipPlace: 650,
+      breakwater: 420,
+      fishingHouse: 140,
+      harbour: 700,
     },
   },
 
