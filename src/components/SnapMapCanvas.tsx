@@ -3,6 +3,18 @@ import maplibregl from 'maplibre-gl';
 import { LocationPreset } from '../config/gameConfig';
 import ThreeMapLayer from '../graphics/ThreeMapLayer';
 
+export type PerspectiveMode = 'tpp' | 'fpp';
+export type WidenLevel = '1x' | '2x' | '5x' | '10x';
+
+export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; label: string; desc: string }> = {
+  '1x': { zoom: 18.5, pitch: 78, label: '1x', desc: 'Close Chase' },
+  '2x': { zoom: 17.6, pitch: 72, label: '2x', desc: 'Wide TPP' },
+  '5x': { zoom: 16.2, pitch: 60, label: '5x', desc: 'High Drone' },
+  '10x': { zoom: 14.8, pitch: 45, label: '10x', desc: 'Tactical Overview' },
+};
+
+export const FPP_CONFIG = { zoom: 19.5, pitch: 83, label: 'FPP', desc: 'First Person' };
+
 export interface SnapMapCanvasRef {
   toggle3D: () => boolean;
   recenter: () => void;
@@ -11,6 +23,10 @@ export interface SnapMapCanvasRef {
   toggleRotateMode: () => boolean;
   moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => void;
   getCameraBearing: () => number;
+  setPerspective: (mode: PerspectiveMode) => void;
+  setWidenLevel: (level: WidenLevel) => void;
+  getPerspective: () => PerspectiveMode;
+  getWidenLevel: () => WidenLevel;
   is3D: boolean;
   isRotateMode: boolean;
 }
@@ -29,6 +45,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     const is3DRef = useRef<boolean>(true);
     const isRotateModeRef = useRef<boolean>(false);
     const isManualInteractingRef = useRef<boolean>(false);
+    const perspectiveRef = useRef<PerspectiveMode>('tpp');
+    const widenLevelRef = useRef<WidenLevel>('2x');
     const playerCoordsRef = useRef<{ lat: number; lng: number }>({
       lat: currentLocation.lat,
       lng: currentLocation.lng,
@@ -38,8 +56,11 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       toggle3D: () => {
         if (!map.current) return is3DRef.current;
         is3DRef.current = !is3DRef.current;
+        const targetPitch = is3DRef.current
+          ? (perspectiveRef.current === 'fpp' ? FPP_CONFIG.pitch : WIDEN_CONFIG[widenLevelRef.current].pitch)
+          : 0;
         map.current.easeTo({
-          pitch: is3DRef.current ? 75 : 0,
+          pitch: targetPitch,
           duration: 600,
         });
         return is3DRef.current;
@@ -48,10 +69,14 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         if (!map.current) return;
         const lat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
         const lng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+        const zoom = perspectiveRef.current === 'fpp' ? FPP_CONFIG.zoom : WIDEN_CONFIG[widenLevelRef.current].zoom;
+        const pitch = is3DRef.current
+          ? (perspectiveRef.current === 'fpp' ? FPP_CONFIG.pitch : WIDEN_CONFIG[widenLevelRef.current].pitch)
+          : 0;
         map.current.flyTo({
           center: [lng, lat],
-          zoom: 17.8,
-          pitch: is3DRef.current ? 75 : 0,
+          zoom,
+          pitch,
           duration: 1000,
         });
       },
@@ -74,6 +99,48 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         isRotateModeRef.current = !isRotateModeRef.current;
         return isRotateModeRef.current;
       },
+      setPerspective: (mode: PerspectiveMode) => {
+        perspectiveRef.current = mode;
+        if (threeLayer.current) {
+          threeLayer.current.setPerspective(mode);
+        }
+        if (!map.current) return;
+        if (mode === 'fpp') {
+          map.current.easeTo({
+            zoom: FPP_CONFIG.zoom,
+            pitch: FPP_CONFIG.pitch,
+            duration: 600,
+            easing: (t) => t * (2 - t),
+          });
+        } else {
+          const cfg = WIDEN_CONFIG[widenLevelRef.current];
+          map.current.easeTo({
+            zoom: cfg.zoom,
+            pitch: is3DRef.current ? cfg.pitch : 0,
+            duration: 600,
+            easing: (t) => t * (2 - t),
+          });
+        }
+      },
+      setWidenLevel: (level: WidenLevel) => {
+        widenLevelRef.current = level;
+        if (perspectiveRef.current === 'fpp') {
+          perspectiveRef.current = 'tpp';
+          if (threeLayer.current) {
+            threeLayer.current.setPerspective('tpp');
+          }
+        }
+        if (!map.current) return;
+        const cfg = WIDEN_CONFIG[level];
+        map.current.easeTo({
+          zoom: cfg.zoom,
+          pitch: is3DRef.current ? cfg.pitch : 0,
+          duration: 600,
+          easing: (t) => t * (2 - t),
+        });
+      },
+      getPerspective: () => perspectiveRef.current,
+      getWidenLevel: () => widenLevelRef.current,
       moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
         if (!threeLayer.current) return;
         if (isMoving) {
@@ -86,21 +153,32 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Ultra-smooth third-person chase camera locked to character
+          // Ultra-smooth chase camera locked to character
           if (map.current && !isManualInteractingRef.current) {
             const currentBearing = map.current.getBearing();
             let newBearing = currentBearing;
 
-            // Only rotate camera behind player if steering mostly forward (sUp > 0.1)
-            // If strafing sideways or moving backward, keep current bearing steady
-            if (sUp === undefined || sUp > 0.1) {
+            if (perspectiveRef.current === 'fpp') {
+              // In FPP, camera heading matches character heading directly
               const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
               let diff = targetBearing - currentBearing;
               while (diff < -180) diff += 360;
               while (diff > 180) diff -= 360;
-
               if (Math.abs(diff) > 0.05) {
-                newBearing = (currentBearing + diff * 0.045 + 360) % 360;
+                newBearing = (currentBearing + diff * 0.08 + 360) % 360;
+              }
+            } else {
+              // In TPP, only rotate behind player if steering mostly forward (sUp > 0.1)
+              // If strafing sideways or moving backward, keep current bearing steady
+              if (sUp === undefined || sUp > 0.1) {
+                const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
+                let diff = targetBearing - currentBearing;
+                while (diff < -180) diff += 360;
+                while (diff > 180) diff -= 360;
+
+                if (Math.abs(diff) > 0.05) {
+                  newBearing = (currentBearing + diff * 0.045 + 360) % 360;
+                }
               }
             }
 
@@ -153,7 +231,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             while (diff < -180) diff += 360;
             while (diff > 180) diff -= 360;
 
-            const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * 0.045 + 360) % 360 : currentBearing;
+            const turnRate = perspectiveRef.current === 'fpp' ? 0.08 : 0.045;
+            const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnRate + 360) % 360 : currentBearing;
             map.current.jumpTo({
               center: [pLng, pLat],
               bearing: newBearing,
@@ -171,17 +250,18 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
       if (!map.current) {
         playerCoordsRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
+        const initCfg = WIDEN_CONFIG[widenLevelRef.current];
 
         const mapInstance = new maplibregl.Map({
           container: mapContainer.current,
           style: '/pastel-style.json',
           center: [currentLocation.lng, currentLocation.lat],
-          zoom: 17.8,
-          pitch: 75,
+          zoom: initCfg.zoom,
+          pitch: initCfg.pitch,
           bearing: 0,
           maxPitch: 85,
           minPitch: 0,
-          maxZoom: 19.5,
+          maxZoom: 20,
           minZoom: 10,
           dragRotate: true,
           pitchWithRotate: true,
@@ -221,6 +301,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         mapInstance.on('style.load', () => {
           const layer = new ThreeMapLayer(currentLocation.lat, currentLocation.lng);
           threeLayer.current = layer;
+          layer.setPerspective(perspectiveRef.current);
           mapInstance.addLayer(layer);
         });
 
@@ -301,11 +382,15 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     useEffect(() => {
       if (map.current && threeLayer.current) {
         playerCoordsRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
+        const zoom = perspectiveRef.current === 'fpp' ? FPP_CONFIG.zoom : WIDEN_CONFIG[widenLevelRef.current].zoom;
+        const pitch = is3DRef.current
+          ? (perspectiveRef.current === 'fpp' ? FPP_CONFIG.pitch : WIDEN_CONFIG[widenLevelRef.current].pitch)
+          : 0;
 
         map.current.flyTo({
           center: [currentLocation.lng, currentLocation.lat],
-          zoom: 17.8,
-          pitch: is3DRef.current ? 75 : 0,
+          zoom,
+          pitch,
           duration: 1600,
         });
 

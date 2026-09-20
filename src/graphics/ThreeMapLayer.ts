@@ -53,6 +53,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   public playerAvatarGroup!: THREE.Group;
   public character!: RealisticCharacter;
+  public isFpp = false;
   public currentPos = new THREE.Vector2(0, 0);
   public targetPos = new THREE.Vector2(0, 0);
   public isWalking = false;
@@ -209,6 +210,13 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.playerAvatarGroup.position.set(local.x, 0, local.z);
         this.updateChunks(local.x, local.z);
       }
+    }
+  }
+
+  public setPerspective(mode: 'tpp' | 'fpp') {
+    this.isFpp = mode === 'fpp';
+    if (this.character && this.character.group) {
+      this.character.group.visible = !this.isFpp;
     }
   }
 

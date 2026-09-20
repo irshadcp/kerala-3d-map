@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import SnapMapCanvas, { SnapMapCanvasRef } from './components/SnapMapCanvas';
+import SnapMapCanvas, { SnapMapCanvasRef, PerspectiveMode, WidenLevel } from './components/SnapMapCanvas';
 import { LocationPreset } from './config/gameConfig';
 import GlobalSearchModal from './components/GlobalSearchModal';
 import VirtualJoystick from './components/VirtualJoystick';
+import GamerCameraControls from './components/GamerCameraControls';
 import { GeocodingResult } from './services/geocodingService';
 import {
   MapPin,
@@ -17,7 +18,6 @@ import {
   Flame,
   Clock,
   Sparkles,
-  UserPlus,
   RotateCw,
   RotateCcw,
   Compass,
@@ -57,8 +57,23 @@ function App() {
   const [is3DMode, setIs3DMode] = useState(true);
   const [isRotateMode, setIsRotateMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
+  const [perspective, setPerspective] = useState<PerspectiveMode>('tpp');
+  const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
+
+  const handlePerspectiveChange = (mode: PerspectiveMode) => {
+    setPerspective(mode);
+    canvasRef.current?.setPerspective(mode);
+  };
+
+  const handleWidenChange = (level: WidenLevel) => {
+    setWidenLevel(level);
+    if (perspective === 'fpp') {
+      setPerspective('tpp');
+    }
+    canvasRef.current?.setWidenLevel(level);
+  };
 
   if (typeof window !== 'undefined') {
     (window as any).__snapMapSetLocation = (lat: number, lng: number, name: string) => {
@@ -659,26 +674,28 @@ function App() {
 
       {/* Bottom Snapchat Bar */}
       <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none flex flex-col items-center pb-2">
-        {/* Helper Pill: Rotate indicator or Walk hint */}
-        <div className="pointer-events-auto mb-2.5">
-          {isRotateMode ? (
+        {/* Gamer Camera Controls: TPP / FPP & 1x / 2x / 5x / 10x */}
+        <div className="pointer-events-auto mb-2">
+          <GamerCameraControls
+            perspective={perspective}
+            widenLevel={widenLevel}
+            onPerspectiveChange={handlePerspectiveChange}
+            onWidenChange={handleWidenChange}
+          />
+        </div>
+
+        {/* Rotate Mode notification if active */}
+        {isRotateMode && (
+          <div className="pointer-events-auto mb-2">
             <button
               onClick={handleToggleRotateMode}
-              className="glass-pill px-4 py-2 shadow-lg flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700"
+              className="glass-pill px-3 py-1 shadow-lg flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold"
             >
-              <RotateCw size={14} className="animate-spin" />
-              <span className="text-xs font-extrabold">🔄 Rotate Mode Active — Drag to Orbit 360°</span>
+              <RotateCw size={13} className="animate-spin" />
+              <span>Rotate Active — Drag Screen</span>
             </button>
-          ) : (
-            <button
-              onClick={() => handleRecenter()}
-              className="glass-pill px-4 py-2 shadow-lg flex items-center gap-2 hover:bg-white transition-all"
-            >
-              <UserPlus size={15} className="text-blue-500" />
-              <span className="text-xs font-bold text-gray-800">🚶 Tap / Joystick to walk</span>
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Snapchat Native 5-Tab Bar */}
         <div className="w-[94%] max-w-sm glass-panel py-2 px-6 flex items-center justify-between shadow-2xl pointer-events-auto rounded-3xl">
