@@ -293,12 +293,12 @@ function App() {
       {/* Top Floating Snapchat Header */}
       <div className="absolute top-0 left-0 right-0 z-30 p-3 pointer-events-none flex flex-col gap-2.5">
         {/* Row 1: Profile Avatar & Live Players, Location Info, Voice Controls & Search */}
-        <div className="flex items-center justify-between w-full pointer-events-auto gap-2">
+        <div className="flex items-center justify-between w-full pointer-events-auto gap-1.5 sm:gap-2">
           {/* Left: Profile Bitmoji & Live Players Count Pill */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <div
               onClick={() => setIsOnboardingOpen(true)}
-              className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md flex items-center justify-center text-lg cursor-pointer hover:scale-105 transition-transform"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md flex items-center justify-center text-base sm:text-lg cursor-pointer hover:scale-105 transition-transform"
               title={userProfile ? `${userProfile.name} (${userProfile.district}) — ക്ലിക്ക് ചെയ്ത് പ്രൊഫൈൽ മാറ്റാം` : 'Set Profile'}
             >
               {userProfile ? '😎' : '👤'}
@@ -321,32 +321,32 @@ function App() {
             />
           </div>
 
-          {/* Center: Location Pill / Global Search Trigger */}
-          <div className="relative">
+          {/* Center: Compact Location Pill / Global Search Trigger */}
+          <div className="relative min-w-0 max-w-[130px] sm:max-w-[200px]">
             <button
-              className="glass-pill px-3.5 py-2 flex items-center gap-2 shadow-md cursor-pointer hover:bg-white/95 transition-all"
+              className="glass-pill px-2 sm:px-3 py-1 sm:py-1.5 flex items-center gap-1 shadow-md cursor-pointer hover:bg-white/95 transition-all w-full"
               onClick={() => setIsSearchOpen(true)}
               title="Click to search any global location"
             >
-              <div className="flex flex-col items-center leading-tight">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-gray-900 text-xs sm:text-sm tracking-tight">
+              <div className="flex flex-col items-center leading-tight min-w-0 w-full">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="font-extrabold text-gray-900 text-[11px] sm:text-xs tracking-tight truncate max-w-[95px] sm:max-w-[160px]">
                     {currentLocation.name}
                   </span>
-                  <ChevronDown size={14} className="text-gray-500" />
+                  <ChevronDown size={12} className="text-gray-500 shrink-0" />
                 </div>
-                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-gray-500">
-                  <Sun size={11} className="text-amber-500" />
+                <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-medium text-gray-500">
+                  <Sun size={10} className="text-amber-500 shrink-0" />
                   <span>{currentLocation.temp || '28°C'}</span>
                   <span>•</span>
-                  <span>{currentLocation.weather || 'Sunny'}</span>
+                  <span className="truncate">{currentLocation.weather || 'Sunny'}</span>
                 </div>
               </div>
             </button>
           </div>
 
-          {/* Right: Proximity Voice Controls & Quick Search Button */}
-          <div className="flex items-center gap-2">
+          {/* Right: Compact Proximity Voice Controls & Quick Search Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <VoiceControls
               isMuted={isMuted}
               onToggleMute={() => {
@@ -371,53 +371,51 @@ function App() {
 
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="w-10 h-10 rounded-full glass-pill flex items-center justify-center text-gray-700 shadow-md hover:bg-white transition-colors pointer-events-auto"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill flex items-center justify-center text-gray-700 shadow-md hover:bg-white transition-colors pointer-events-auto border border-gray-200/80"
               title="Search Any Global Place"
             >
-              <Search size={18} />
+              <Search size={15} />
             </button>
           </div>
         </div>
       </div>
 
       {/* Floating Right Side Camera Controls: 2x, 5x, 10x, and Map */}
-      <div className="absolute right-3 top-24 sm:top-28 z-20 pointer-events-auto">
+      <div className="absolute right-3 top-20 sm:top-24 z-20 pointer-events-auto">
         <GamerCameraControls
           widenLevel={widenLevel}
           onWidenChange={handleWidenChange}
         />
       </div>
 
-      {/* Floating Virtual Joystick & Drive Vehicle Controls for Mobile & Desktop */}
-      <div className="absolute bottom-6 sm:bottom-8 left-3 sm:left-5 z-30 pointer-events-auto flex items-end gap-2.5">
-        <VirtualJoystick
-          onMove={(dirX, dirZ, isMoving, dt, sUp) => {
-            canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
-          }}
-          getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
-        />
+      {/* Dynamic Floating Touch Joystick - spans bottom gameplay area */}
+      <VirtualJoystick
+        onMove={(dirX, dirZ, isMoving, dt, sUp) => {
+          canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
+        }}
+        getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
+      />
 
-        {/* Drive / Exit Kerala Vehicle Button */}
-        <button
-          onClick={handleToggleDrive}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl shadow-xl transition-all pointer-events-auto backdrop-blur-md active:scale-95 mb-2 ${
-            isDriving
-              ? 'bg-amber-500 hover:bg-amber-600 text-white border-2 border-amber-300 shadow-amber-500/30 ring-2 ring-amber-400/50'
-              : 'bg-white/95 hover:bg-white text-gray-800 border border-gray-200/90 hover:shadow-2xl'
-          }`}
-          title={isDriving ? "Exit Vehicle (Press E or F)" : "Drive Vehicle (Press E or F)"}
-        >
-          <span className="text-xl leading-none">{isDriving ? '🚶' : '🛺'}</span>
-          <div className="flex flex-col text-left">
-            <span className="leading-tight font-extrabold text-[12px]">
-              {isDriving ? 'Exit Auto' : 'Drive Auto'}
-            </span>
-            <span className="text-[10px] opacity-85 font-semibold leading-none">
-              {isDriving ? 'ഇറങ്ങുക' : 'ഓടിക്കുക'}
-            </span>
-          </div>
-        </button>
-      </div>
+      {/* Drive / Exit Kerala Vehicle Button - Dedicated Bottom Right Position */}
+      <button
+        onClick={handleToggleDrive}
+        className={`absolute bottom-6 sm:bottom-8 right-3.5 sm:right-5 z-30 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl shadow-xl transition-all pointer-events-auto backdrop-blur-md active:scale-95 border ${
+          isDriving
+            ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-300 shadow-amber-500/30 ring-2 ring-amber-400/50'
+            : 'bg-white/95 hover:bg-white text-gray-800 border-gray-200/90 hover:shadow-2xl'
+        }`}
+        title={isDriving ? "Exit Vehicle (Press E or F)" : "Drive Vehicle (Press E or F)"}
+      >
+        <span className="text-xl leading-none">{isDriving ? '🚶' : '🛺'}</span>
+        <div className="flex flex-col text-left">
+          <span className="leading-tight font-extrabold text-[11px] sm:text-[12px]">
+            {isDriving ? 'Exit Auto' : 'Drive Auto'}
+          </span>
+          <span className="text-[9px] sm:text-[10px] opacity-85 font-semibold leading-none">
+            {isDriving ? 'ഇറങ്ങുക' : 'ഓടിക്കുക'}
+          </span>
+        </div>
+      </button>
     </div>
   );
 }

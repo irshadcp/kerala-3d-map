@@ -87,6 +87,12 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
     const dy = e.clientY - originRef.current.y;
     const dist = Math.hypot(dx, dy);
 
+    if (dist < 3) {
+      setKnobPos({ x: 0, y: 0 });
+      currentVectorRef.current = { x: 0, y: 0 };
+      return;
+    }
+
     const clampedDist = Math.min(dist, radius);
     const angle = Math.atan2(dy, dx);
 
@@ -167,15 +173,15 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="absolute bottom-0 left-0 w-[55vw] sm:w-[380px] h-[35vh] sm:h-[280px] pointer-events-auto touch-none select-none z-20"
+      className="absolute bottom-0 left-0 w-[calc(100%-85px)] sm:w-[calc(100%-110px)] h-[44vh] sm:h-[40vh] pointer-events-auto touch-none select-none z-20"
       style={{ touchAction: 'none' }}
     >
-      {/* Joystick Base Ring - Floating dynamically under thumb when active, or resting at bottom-left */}
+      {/* Joystick Base Ring - Centered at bottom when resting, or floating dynamically under thumb when active */}
       <div
-        className={`absolute rounded-full border border-white/40 shadow-2xl flex items-center justify-center transition-opacity duration-200 pointer-events-none ${
+        className={`absolute rounded-full border border-white/50 shadow-2xl flex items-center justify-center transition-opacity duration-200 pointer-events-none ${
           isActive
-            ? 'w-24 h-24 sm:w-28 sm:h-28 bg-slate-900/60 backdrop-blur-md ring-2 ring-emerald-400/60 opacity-100'
-            : 'w-20 h-20 sm:w-24 sm:h-24 bg-slate-900/35 backdrop-blur-sm opacity-60 hover:opacity-85'
+            ? 'w-24 h-24 sm:w-28 sm:h-28 bg-slate-900/65 backdrop-blur-md ring-2 ring-emerald-400/70 opacity-100'
+            : 'w-20 h-20 sm:w-22 sm:h-22 bg-slate-900/40 backdrop-blur-sm opacity-60'
         }`}
         style={
           basePos
@@ -185,8 +191,9 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
                 transform: 'translate(-50%, -50%)',
               }
             : {
-                left: '28px',
-                bottom: '24px',
+                left: '50%',
+                bottom: '22px',
+                transform: 'translateX(-50%)',
               }
         }
       >
