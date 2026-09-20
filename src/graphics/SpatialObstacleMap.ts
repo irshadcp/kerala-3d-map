@@ -465,15 +465,46 @@ export class SpatialObstacleMap {
     halfWidth: number,
     angle: number
   ): boolean {
-    if (!this.isReady) return true;
+    if (!this.isReady) return false;
+
+    // Fast precise path for character & small agent footprints
+    if (halfLength <= 1.0 && halfWidth <= 1.0) {
+      const radius = Math.max(halfLength, halfWidth);
+      const cellX = Math.floor(px / BUCKET_SIZE);
+      const cellZ = Math.floor(pz / BUCKET_SIZE);
+      const bldgs = this.buildingBuckets.get(this.getBucketKey(cellX, cellZ));
+      if (!bldgs) return false;
+
+      for (const b of bldgs) {
+        if (
+          px < b.minX - radius ||
+          px > b.maxX + radius ||
+          pz < b.minZ - radius ||
+          pz > b.maxZ + radius
+        ) {
+          continue;
+        }
+        if (this.pointInPolygon(px, pz, b.rings[0])) return true;
+        for (const ring of b.rings) {
+          for (let i = 0; i < ring.length - 1; i++) {
+            if (this.distToSegment(px, pz, ring[i], ring[i + 1]) < radius) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    // Footprint check for larger rectangular structures
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    const stepL = Math.max(3, halfLength / 3);
-    const stepW = Math.max(2, halfWidth / 2);
+    const stepL = Math.max(1.5, halfLength / 4);
+    const stepW = Math.max(1.5, halfWidth / 3);
 
-    for (let u = -halfLength; u <= halfLength; u += stepL) {
-      for (let v = -halfWidth; v <= halfWidth; v += stepW) {
+    for (let u = -halfLength; u <= halfLength + 0.1; u += stepL) {
+      for (let v = -halfWidth; v <= halfWidth + 0.1; v += stepW) {
         const sx = px + cos * u - sin * v;
         const sz = pz + sin * u + cos * v;
 
@@ -489,6 +520,82 @@ export class SpatialObstacleMap {
       }
     }
     return false;
+  }
+
+  /**
+   * Finds the nearest building surface to (px, pz), returning distance, closest surface point (qx, qz),
+   * and the outward unit normal (nx, nz) pointing safely away from the building.
+   */
+  public getNearestBuildingSurface(
+    px: number,
+    pz: number,
+    searchRadius = 3.5
+  ): { dist: number; nx: number; nz: number; qx: number; qz: number } | null {
+    if (!this.isReady) return null;
+
+    const cellRadius = Math.ceil(searchRadius / BUCKET_SIZE);
+    const cellX = Math.floor(px / BUCKET_SIZE);
+    const cellZ = Math.floor(pz / BUCKET_SIZE);
+
+    let minDist = Infinity;
+    let bestNx = 0;
+    let bestNz = 0;
+    let bestQx = px;
+    let bestQz = pz;
+
+    for (let cx = cellX - cellRadius; cx <= cellX + cellRadius; cx++) {
+      for (let cz = cellZ - cellRadius; cz <= cellZ + cellRadius; cz++) {
+        const bldgs = this.buildingBuckets.get(this.getBucketKey(cx, cz));
+        if (!bldgs) continue;
+
+        for (const b of bldgs) {
+          if (
+            px < b.minX - searchRadius ||
+            px > b.maxX + searchRadius ||
+            pz < b.minZ - searchRadius ||
+            pz > b.maxZ + searchRadius
+          ) {
+            continue;
+          }
+
+          for (const ring of b.rings) {
+            for (let i = 0; i < ring.length - 1; i++) {
+              const p1 = ring[i];
+              const p2 = ring[i + 1];
+              const dx = p2.x - p1.x;
+              const dz = p2.z - p1.z;
+              const lenSq = dx * dx + dz * dz;
+              if (lenSq === 0) continue;
+
+              let t = ((px - p1.x) * dx + (pz - p1.z) * dz) / lenSq;
+              t = Math.max(0, Math.min(1, t));
+              const qx = p1.x + t * dx;
+              const qz = p1.z + t * dz;
+              const d = Math.hypot(px - qx, pz - qz);
+
+              if (d < minDist) {
+                minDist = d;
+                bestQx = qx;
+                bestQz = qz;
+                if (d > 0.001) {
+                  bestNx = (px - qx) / d;
+                  bestNz = (pz - qz) / d;
+                } else {
+                  const len = Math.sqrt(lenSq);
+                  bestNx = -dz / len;
+                  bestNz = dx / len;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (minDist <= searchRadius) {
+      return { dist: minDist, nx: bestNx, nz: bestNz, qx: bestQx, qz: bestQz };
+    }
+    return null;
   }
 
   /**

@@ -56,30 +56,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public currentPos = new THREE.Vector2(0, 0);
   public targetPos = new THREE.Vector2(0, 0);
   public isWalking = false;
-  private pathStuckCount = 0;
   private lastFrameTime = performance.now();
   private lastChunkCheckX = 0;
   private lastChunkCheckZ = 0;
   private loadedChunks = new Map<string, THREE.Group>();
   private readonly CHUNK_SIZE = 150;
   private readonly LOAD_RADIUS = 450;
-
-  // Steering & obstacle avoidance offsets:
-  // Evaluates direct (0°), then leftward deviations (+30°, +45°, +60°, +90°, +120°),
-  // then rightward deviations (-30°, -45°, -60°, -90°, -120°)
-  private readonly AVOIDANCE_ANGLES = [
-    0,
-    Math.PI / 6,
-    Math.PI / 4,
-    Math.PI / 3,
-    Math.PI / 2,
-    (2 * Math.PI) / 3,
-    -Math.PI / 6,
-    -Math.PI / 4,
-    -Math.PI / 3,
-    -Math.PI / 2,
-    -(2 * Math.PI) / 3,
-  ];
 
   // Pre-allocated matrices for render loop
   private _m = new THREE.Matrix4();
@@ -229,11 +211,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
   }
 
-  public isPositionBlocked(px: number, pz: number): boolean {
+  public isPositionBlocked(px: number, pz: number, radius = 0.4): boolean {
     if (!this.obstacleMap.isReady) return false;
     return (
-      this.obstacleMap.isBuildingCollision(px, pz, 0.45, 0.45, 0) ||
-      this.obstacleMap.isPointInWater(px, pz, 0.5)
+      this.obstacleMap.isBuildingCollision(px, pz, radius, radius, 0) ||
+      this.obstacleMap.isPointInWater(px, pz, 0.3)
     );
   }
 
@@ -241,22 +223,46 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (!this.character || !this.playerAvatarGroup) return;
 
     const moveSpeed = 10.5; // 10.5 m/s jog speed
-    const stepX = dirX * moveSpeed * delta;
-    const stepZ = dirZ * moveSpeed * delta;
+    const stepDist = moveSpeed * delta;
+    const nextX = this.currentPos.x + dirX * stepDist;
+    const nextZ = this.currentPos.y + dirZ * stepDist;
 
-    const nextX = this.currentPos.x + stepX;
-    const nextZ = this.currentPos.y + stepZ;
-
-    // Obstacle collision check with smooth wall-sliding along free axes
-    if (!this.isPositionBlocked(nextX, nextZ)) {
+    // Obstacle collision check with smooth surface-normal wall sliding
+    if (!this.isPositionBlocked(nextX, nextZ, 0.4)) {
       this.currentPos.x = nextX;
       this.currentPos.y = nextZ;
     } else {
-      // Wall sliding: if moving diagonally into an obstacle, slide along X or Z
-      if (!this.isPositionBlocked(nextX, this.currentPos.y)) {
-        this.currentPos.x = nextX;
-      } else if (!this.isPositionBlocked(this.currentPos.x, nextZ)) {
-        this.currentPos.y = nextZ;
+      // Wall sliding along surface normal
+      const surf = this.obstacleMap.getNearestBuildingSurface(this.currentPos.x, this.currentPos.y, 2.5);
+      if (surf) {
+        const dot = dirX * surf.nx + dirZ * surf.nz;
+        if (dot < 0) {
+          let sx = dirX - dot * surf.nx;
+          let sz = dirZ - dot * surf.nz;
+          const slen = Math.hypot(sx, sz);
+          if (slen > 0.05) {
+            sx /= slen;
+            sz /= slen;
+            let tx = this.currentPos.x + sx * stepDist;
+            let tz = this.currentPos.y + sz * stepDist;
+            const sn = this.obstacleMap.getNearestBuildingSurface(tx, tz, 1.5);
+            if (sn && sn.dist < 0.45) {
+              tx += sn.nx * (0.45 - sn.dist);
+              tz += sn.nz * (0.45 - sn.dist);
+            }
+            if (!this.isPositionBlocked(tx, tz, 0.35)) {
+              this.currentPos.x = tx;
+              this.currentPos.y = tz;
+            }
+          }
+        }
+      } else {
+        // Fallback: axis sliding
+        if (!this.isPositionBlocked(nextX, this.currentPos.y, 0.4)) {
+          this.currentPos.x = nextX;
+        } else if (!this.isPositionBlocked(this.currentPos.x, nextZ, 0.4)) {
+          this.currentPos.y = nextZ;
+        }
       }
     }
     this.targetPos.copy(this.currentPos);
@@ -390,49 +396,134 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     // Smooth character walking & procedural animation
     if (this.character && this.playerAvatarGroup) {
       const dist = this.currentPos.distanceTo(this.targetPos);
-      if (dist > 0.25) {
+      if (dist > 0.3) {
         this.isWalking = true;
         const baseDirX = (this.targetPos.x - this.currentPos.x) / dist;
         const baseDirZ = (this.targetPos.y - this.currentPos.y) / dist;
         const moveStep = Math.min(dist, 9.5 * delta);
-        const baseAngle = Math.atan2(baseDirX, baseDirZ);
 
-        // If very close to destination and target is inside an obstacle/building, mark arrived
-        if (dist < 1.2 && this.isPositionBlocked(this.targetPos.x, this.targetPos.y)) {
+        // If very close to destination and destination is inside an obstacle/building, mark arrived
+        if (dist < 1.4 && this.isPositionBlocked(this.targetPos.x, this.targetPos.y, 0.2)) {
           this.targetPos.copy(this.currentPos);
           this.isWalking = false;
-          this.pathStuckCount = 0;
           this.character.update(delta, false, 1.0);
         } else {
+          const directNextX = this.currentPos.x + baseDirX * moveStep;
+          const directNextZ = this.currentPos.y + baseDirZ * moveStep;
+
           let moved = false;
           let chosenX = this.currentPos.x;
           let chosenZ = this.currentPos.y;
-          let chosenHeading = baseAngle;
+          let chosenHeading = Math.atan2(baseDirX, baseDirZ);
 
-          // Try direct path first (0°), then leftward deviations (+30°, +45°, +60°, +90°, +120°),
-          // then rightward deviations (-30°, -45°, -60°, -90°, -120°)
-          for (const offset of this.AVOIDANCE_ANGLES) {
-            const testAngle = baseAngle + offset;
-            const testDirX = Math.sin(testAngle);
-            const testDirZ = Math.cos(testAngle);
-            const stepDist = offset === 0 ? moveStep : moveStep * 0.85;
+          // 1. Check direct straight path first
+          if (!this.isPositionBlocked(directNextX, directNextZ, 0.4)) {
+            chosenX = directNextX;
+            chosenZ = directNextZ;
+            chosenHeading = Math.atan2(baseDirX, baseDirZ);
+            moved = true;
+          } else {
+            // 2. Direct path blocked! Find nearest building surface to slide around it
+            const surf = this.obstacleMap.getNearestBuildingSurface(this.currentPos.x, this.currentPos.y, 3.5);
+            if (surf) {
+              const dot = baseDirX * surf.nx + baseDirZ * surf.nz;
+              let slideDirX = 0;
+              let slideDirZ = 0;
 
-            const testX = this.currentPos.x + testDirX * stepDist;
-            const testZ = this.currentPos.y + testDirZ * stepDist;
+              // Left tangent along the wall (user preferred direction)
+              const tanLeftX = -surf.nz;
+              const tanLeftZ = surf.nx;
+              const tanRightX = surf.nz;
+              const tanRightZ = -surf.nx;
 
-            if (!this.isPositionBlocked(testX, testZ)) {
-              chosenX = testX;
-              chosenZ = testZ;
-              chosenHeading = testAngle;
-              moved = true;
-              break;
+              if (dot < 0) {
+                // Vector points into wall: project onto wall plane
+                let sx = baseDirX - dot * surf.nx;
+                let sz = baseDirZ - dot * surf.nz;
+                const slen = Math.hypot(sx, sz);
+                if (slen > 0.15) {
+                  slideDirX = sx / slen;
+                  slideDirZ = sz / slen;
+                } else {
+                  // Head-on against wall: prioritize sliding LEFT
+                  slideDirX = tanLeftX;
+                  slideDirZ = tanLeftZ;
+                }
+              } else {
+                slideDirX = tanLeftX;
+                slideDirZ = tanLeftZ;
+              }
+
+              // Test slide direction
+              let testX = this.currentPos.x + slideDirX * moveStep;
+              let testZ = this.currentPos.y + slideDirZ * moveStep;
+
+              // Maintain safe clearance from wall
+              const sn = this.obstacleMap.getNearestBuildingSurface(testX, testZ, 1.5);
+              if (sn && sn.dist < 0.45) {
+                testX += sn.nx * (0.45 - sn.dist);
+                testZ += sn.nz * (0.45 - sn.dist);
+              }
+
+              if (!this.isPositionBlocked(testX, testZ, 0.35)) {
+                chosenX = testX;
+                chosenZ = testZ;
+                chosenHeading = Math.atan2(slideDirX, slideDirZ);
+                moved = true;
+              } else {
+                // Try opposite side (RIGHT)
+                const oppDirX = (slideDirX === tanLeftX) ? tanRightX : -slideDirX;
+                const oppDirZ = (slideDirZ === tanLeftZ) ? tanRightZ : -slideDirZ;
+                let testOppX = this.currentPos.x + oppDirX * moveStep;
+                let testOppZ = this.currentPos.y + oppDirZ * moveStep;
+
+                const snOpp = this.obstacleMap.getNearestBuildingSurface(testOppX, testOppZ, 1.5);
+                if (snOpp && snOpp.dist < 0.45) {
+                  testOppX += snOpp.nx * (0.45 - snOpp.dist);
+                  testOppZ += snOpp.nz * (0.45 - snOpp.dist);
+                }
+
+                if (!this.isPositionBlocked(testOppX, testOppZ, 0.35)) {
+                  chosenX = testOppX;
+                  chosenZ = testOppZ;
+                  chosenHeading = Math.atan2(oppDirX, oppDirZ);
+                  moved = true;
+                }
+              }
+            }
+
+            // 3. Fallback: check radial fan prioritizing LEFT
+            if (!moved) {
+              const angles = [
+                Math.PI / 2,         // Left 90°
+                Math.PI / 3,         // Left 60°
+                (2 * Math.PI) / 3,   // Left 120°
+                Math.PI / 4,         // Left 45°
+                -Math.PI / 2,        // Right 90°
+                -Math.PI / 3,        // Right 60°
+                -(2 * Math.PI) / 3,  // Right 120°
+                -Math.PI / 4,        // Right 45°
+                Math.PI              // Backtrack 180°
+              ];
+              const baseAngle = Math.atan2(baseDirX, baseDirZ);
+              for (const off of angles) {
+                const ang = baseAngle + off;
+                const tx = this.currentPos.x + Math.sin(ang) * moveStep * 0.85;
+                const tz = this.currentPos.y + Math.cos(ang) * moveStep * 0.85;
+                if (!this.isPositionBlocked(tx, tz, 0.35)) {
+                  chosenX = tx;
+                  chosenZ = tz;
+                  chosenHeading = ang;
+                  moved = true;
+                  break;
+                }
+              }
             }
           }
 
           if (moved) {
             this.currentPos.x = chosenX;
             this.currentPos.y = chosenZ;
-            this.pathStuckCount = 0;
 
             this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
 
@@ -449,18 +540,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
               this.updateChunks(this.currentPos.x, this.currentPos.y);
             }
           } else {
-            // Trapped against a solid barrier with no clear angle
-            this.pathStuckCount++;
-            if (this.pathStuckCount > 35) {
-              this.targetPos.copy(this.currentPos);
-              this.pathStuckCount = 0;
-            }
+            // If truly boxed in on all sides, update idle animation
             this.character.update(delta, false, 1.0);
           }
         }
       } else {
         this.isWalking = false;
-        this.pathStuckCount = 0;
         this.character.update(delta, false, 1.0);
       }
     }
