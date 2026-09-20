@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import SnapMapCanvas, { SnapMapCanvasRef, PerspectiveMode, WidenLevel } from './components/SnapMapCanvas';
+import SnapMapCanvas, { SnapMapCanvasRef, WidenLevel } from './components/SnapMapCanvas';
 import { LocationPreset } from './config/gameConfig';
 import GlobalSearchModal from './components/GlobalSearchModal';
 import VirtualJoystick from './components/VirtualJoystick';
@@ -57,21 +57,12 @@ function App() {
   const [is3DMode, setIs3DMode] = useState(true);
   const [isRotateMode, setIsRotateMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
-  const [perspective, setPerspective] = useState<PerspectiveMode>('tpp');
-  const [widenLevel, setWidenLevel] = useState<WidenLevel>('1x');
+  const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
 
-  const handlePerspectiveChange = (mode: PerspectiveMode) => {
-    setPerspective(mode);
-    canvasRef.current?.setPerspective(mode);
-  };
-
   const handleWidenChange = (level: WidenLevel) => {
     setWidenLevel(level);
-    if (perspective === 'fpp') {
-      setPerspective('tpp');
-    }
     canvasRef.current?.setWidenLevel(level);
   };
 
@@ -662,12 +653,10 @@ function App() {
         </button>
       </div>
 
-      {/* Floating Gamer Camera & Perspective Controls (Right Side, styled like rotation buttons) */}
+      {/* Floating Camera Widen Controls (Right Side: 2x, 5x, 10x) */}
       <div className="absolute right-2.5 bottom-24 sm:bottom-28 z-20 flex flex-col items-center pointer-events-auto">
         <GamerCameraControls
-          perspective={perspective}
           widenLevel={widenLevel}
-          onPerspectiveChange={handlePerspectiveChange}
           onWidenChange={handleWidenChange}
         />
       </div>

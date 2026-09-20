@@ -55,7 +55,6 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   public playerAvatarGroup!: THREE.Group;
   public character!: RealisticCharacter;
-  public isFpp = false;
   public currentPos = new THREE.Vector2(0, 0);
   public targetPos = new THREE.Vector2(0, 0);
   public isWalking = false;
@@ -220,12 +219,6 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
   }
 
-  public setPerspective(mode: 'tpp' | 'fpp') {
-    this.isFpp = mode === 'fpp';
-    if (this.character && this.character.group) {
-      this.character.group.visible = !this.isFpp;
-    }
-  }
 
   public isPositionBlocked(px: number, pz: number, radius = 0.4): boolean {
     if (!this.obstacleMap.isReady) return false;
