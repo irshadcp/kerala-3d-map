@@ -442,12 +442,12 @@ export const GAME_CONFIG = {
   // Overview Camera Configuration (when inspecting/zooming out)
   overviewTransitionZoom: 20.0,
 
-  // Player physics — tuned for swift, exciting exploration on large real-world maps
-  walkSpeed: 10.0, // meters / second (~36 km/h brisk run/jog)
-  runSpeed: 18.5, // sprint speed (~67 km/h high-speed exploration sprint)
-  acceleration: 60.0,
-  damping: 14.0,
-  turnSpeed: 14.0, // radians / second
+  // Player physics — tuned for responsive, snappy production-game feel on large real-world maps
+  walkSpeed: 11.5, // meters / second (~41 km/h swift jog)
+  runSpeed: 21.0, // sprint speed (~75 km/h high-speed exploration sprint)
+  acceleration: 95.0, // snappy acceleration, zero sluggish delay
+  damping: 28.0, // crisp deceleration, no ice-skating slide
+  turnSpeed: 28.0, // instant, responsive character turning (radians / second)
 
   // Character dimensions
   characterScale: 1.85, // scaled up for prominent game presence across vast Kerala maps

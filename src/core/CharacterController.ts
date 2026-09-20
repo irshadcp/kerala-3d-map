@@ -163,12 +163,14 @@ export class CharacterController {
       // When moving North (dirX=0, dirZ=-1): target is 0 (or Math.PI)
       this.targetHeadingRad = Math.atan2(moveDir.x, moveDir.z);
     } else {
-      // Apply friction / deceleration
+      // Crisp, responsive deceleration with no ice-skating slide
       this.vx -= this.vx * Math.min(damping * dt, 1.0);
       this.vz -= this.vz * Math.min(damping * dt, 1.0);
 
-      if (Math.abs(this.vx) < 0.05) this.vx = 0;
-      if (Math.abs(this.vz) < 0.05) this.vz = 0;
+      if (Math.hypot(this.vx, this.vz) < 0.25) {
+        this.vx = 0;
+        this.vz = 0;
+      }
     }
 
     // Update position

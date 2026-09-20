@@ -51,6 +51,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private originLat: number;
   private originLng: number;
   private syncTimer = 0;
+  private lastSyncX = -99999;
+  private lastSyncZ = -99999;
   private modelTransform: {
     translateX: number;
     translateY: number;
@@ -513,9 +515,17 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.chunkManager.update(pPos.x, pPos.z, vx, vz);
 
 
+      // High-performance spatial distance-gated synchronization:
+      // Only resync map vector features when player moves > 85m or on 4s idle throttle,
+      // eliminating recurring 400ms frame drops and keeping render loop silky smooth at 60fps!
+      const distFromLastSync = Math.hypot(pPos.x - this.lastSyncX, pPos.z - this.lastSyncZ);
       this.syncTimer += delta;
-      if (this.syncTimer >= 0.4) {
+
+      if (distFromLastSync > 85 || this.syncTimer >= 4.0) {
         this.syncTimer = 0;
+        this.lastSyncX = pPos.x;
+        this.lastSyncZ = pPos.z;
+
         if (this.waterSystem.polygons.length === 0) {
           this.syncWaterFromMap(this.map);
         }
@@ -527,6 +537,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.roadMeshManager.setSegments(segs);
         this.parkingSystem.generateSlotsForSegments(segs);
       }
+
 
       // High-Velocity Forward Route Look-Ahead Streaming
       const speed = Math.hypot(vx, vz);

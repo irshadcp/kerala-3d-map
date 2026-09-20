@@ -192,45 +192,49 @@ export class CharacterModel {
     this.rightArm.rotation.z *= 0.8;
     (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = 0.22;
 
-    if (isMoving && speed > 0.1) {
-      // Walking / running cycle dynamically calibrated to higher speed
-      const cycleSpeed = Math.min(speed * 1.15, 20.0);
+    if (isMoving && speed > 0.25) {
+      // Stride frequency calibrated to match realistic step lengths for 1.85x scale
+      const isSprinting = speed > 15.0;
+      const cycleMultiplier = isSprinting ? 0.72 : 0.85;
+      const cycleSpeed = Math.min(speed * cycleMultiplier, 16.0);
       this.walkPhase += delta * cycleSpeed;
 
       // Leg swing (alternating)
-      const legAngle = Math.sin(this.walkPhase) * 0.75;
+      const legAmplitude = isSprinting ? 0.85 : 0.65;
+      const legAngle = Math.sin(this.walkPhase) * legAmplitude;
       this.leftLeg.rotation.x = legAngle;
       this.rightLeg.rotation.x = -legAngle;
 
       // Arm swing (opposite to legs)
-      this.leftArm.rotation.x = -legAngle * 0.7;
-      this.rightArm.rotation.x = legAngle * 0.7;
+      this.leftArm.rotation.x = -legAngle * 0.75;
+      this.rightArm.rotation.x = legAngle * 0.75;
 
       // Vertical bounce
-      const bounce = Math.abs(Math.sin(this.walkPhase)) * 0.08;
+      const bounce = Math.abs(Math.sin(this.walkPhase)) * (isSprinting ? 0.10 : 0.06);
       this.torso.position.y = 1.35 + bounce;
 
-      // Slight forward lean
-      this.torso.rotation.x = 0.12;
+      // Dynamic forward lean into motion
+      this.torso.rotation.x = isSprinting ? 0.20 : 0.10;
 
       // Shadow pulses subtly
-      this.shadowMesh.scale.set(1 + bounce * 0.5, 1 + bounce * 0.5, 1);
+      this.shadowMesh.scale.set(1 + bounce * 0.4, 1 + bounce * 0.4, 1);
     } else {
-      // Return smoothly to idle
+      // Snappy and smooth return to idle
       this.idleTime += delta * 2.0;
 
-      this.leftLeg.rotation.x *= 0.85;
-      this.rightLeg.rotation.x *= 0.85;
-      this.leftArm.rotation.x *= 0.85;
-      this.rightArm.rotation.x *= 0.85;
+      this.leftLeg.rotation.x *= 0.72;
+      this.rightLeg.rotation.x *= 0.72;
+      this.leftArm.rotation.x *= 0.72;
+      this.rightArm.rotation.x *= 0.72;
 
       // Idle breathing
       const breath = Math.sin(this.idleTime) * 0.02;
       this.torso.position.y = 1.35 + breath;
-      this.torso.rotation.x = 0;
-      this.head.rotation.y = Math.sin(this.idleTime * 0.5) * 0.08;
+      this.torso.rotation.x *= 0.8;
+      this.head.rotation.y = Math.sin(this.idleTime * 0.5) * 0.06;
       this.shadowMesh.scale.set(1, 1, 1);
     }
+
   }
 
   /**

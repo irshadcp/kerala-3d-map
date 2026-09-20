@@ -426,11 +426,10 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
     if (!map) return;
 
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    dragDistanceRef.current = 0;
-
-    // In pan mode (or default Move Map), dragging pans the map.
-    // In rotate mode (or right-click / shift-click), dragging orbits & tilts the camera.
-    const isRotate = interactionMode === 'rotate' || e.button === 2 || e.shiftKey;
+    // In 3D exploration modes (tpp / fpp), dragging orbits & tilts the camera smoothly around the player.
+    // In 2D overview mode, dragging pans the map.
+    const is3D = cameraModeRef.current !== '2d';
+    const isRotate = is3D || interactionMode === 'rotate' || e.button === 2 || e.shiftKey;
     const mode = isRotate ? 'rotate' : 'pan';
 
     isDraggingRef.current = true;
@@ -464,15 +463,16 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
     const map = mapRef.current;
 
     if (dragInfoRef.current.mode === 'rotate') {
-      const deltaBearing = dx * 0.42;
-      const deltaPitch = -dy * 0.28;
+      const deltaBearing = dx * 0.32;
+      const deltaPitch = -dy * 0.20;
       const newBearing = map.getBearing() + deltaBearing;
-      const newPitch = Math.max(0, Math.min(82, map.getPitch() + deltaPitch));
+      const newPitch = Math.max(10, Math.min(84, map.getPitch() + deltaPitch));
 
       map.setBearing(newBearing);
       map.setPitch(newPitch);
       setCurrentBearing(newBearing);
-    } else {
+    }
+ else {
       const panFactor = 0.55;
       map.panBy([-dx * panFactor, -dy * panFactor], { duration: 0 });
 
@@ -658,8 +658,12 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
           }
 
           // Smooth camera lock on vehicle
-          if (!isTeleportingRef.current && !isDraggingRef.current) {
-            const bearingRad = (bearing * Math.PI) / 180;
+          const isOrbiting = isDraggingRef.current && dragInfoRef.current?.mode === 'rotate';
+          const canFollow = !isTeleportingRef.current && (!isDraggingRef.current || isOrbiting);
+
+          if (canFollow) {
+            const currentBearing = map.getBearing();
+            const bearingRad = (currentBearing * Math.PI) / 180;
             const lookAhead =
               cameraModeRef.current === '2d' ? 0.0 : cameraModeRef.current === 'fpp' ? 8.0 : GAME_CONFIG.vehicleLookAhead;
             const origin = threeLayer.characterController.getOrigin();
@@ -677,30 +681,17 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
           const moveDir = inputManager.getCameraRelativeDirection(bearing);
           const isWalking = moveDir.isMoving;
 
-          // When user moves with WASD, if camera was in overview mode,
-          // smoothly ease back to close GTA TPP over-the-shoulder view!
+          // When user moves with WASD, gently restore 3D perspective if pitched flat
           if (isWalking && cameraModeRef.current === 'tpp' && !isDraggingRef.current) {
             const curZoom = map.getZoom();
             const curPitch = map.getPitch();
             if (curZoom < GAME_CONFIG.tppZoom - 0.05) {
-              const newZoom = curZoom + (GAME_CONFIG.tppZoom - curZoom) * Math.min(4.0 * delta, 0.2);
+              const newZoom = curZoom + (GAME_CONFIG.tppZoom - curZoom) * Math.min(3.0 * delta, 0.15);
               map.setZoom(newZoom);
             }
             if (curPitch < GAME_CONFIG.tppPitch - 0.5) {
-              const newPitch = curPitch + (GAME_CONFIG.tppPitch - curPitch) * Math.min(4.0 * delta, 0.2);
+              const newPitch = curPitch + (GAME_CONFIG.tppPitch - curPitch) * Math.min(3.0 * delta, 0.15);
               map.setPitch(newPitch);
-            }
-
-            // GTA Character Follow: When running forward, gently align camera behind character's back
-            if (rawInput.forward > 0.5 && Math.abs(rawInput.strafe) < 0.3) {
-              const charHeadingDeg = threeLayer.characterController.getState().headingDeg;
-              let diff = charHeadingDeg - bearing;
-              diff = ((((diff + 180) % 360) + 360) % 360) - 180;
-              if (Math.abs(diff) > 2.0) {
-                bearing = bearing + diff * Math.min(2.0 * delta, 0.08);
-                map.setBearing(bearing);
-                setCurrentBearing(bearing);
-              }
             }
           }
 
@@ -718,10 +709,14 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
             setCanEnterVehicle(distToVeh < 5.0);
           }
 
-          // Camera Follow: continuously anchor camera to character
-          if (!isTeleportingRef.current && !isDraggingRef.current && (cameraModeRef.current !== '2d' || isWalking)) {
-            const bearingRad = (bearing * Math.PI) / 180;
-            const isCloseTPP = cameraModeRef.current === 'tpp' && map.getZoom() >= 20.2;
+          // Camera Follow: continuously anchor camera to character smoothly without interrupting orbit
+          const isOrbiting = isDraggingRef.current && dragInfoRef.current?.mode === 'rotate';
+          const canFollow = !isTeleportingRef.current && (!isDraggingRef.current || isOrbiting) && (cameraModeRef.current !== '2d' || isWalking);
+
+          if (canFollow) {
+            const currentBearing = map.getBearing();
+            const bearingRad = (currentBearing * Math.PI) / 180;
+            const isCloseTPP = cameraModeRef.current === 'tpp';
 
             const lookAhead =
               cameraModeRef.current === 'fpp'
@@ -750,6 +745,7 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
             map.jumpTo({ center: [targetCoords.lng, targetCoords.lat] });
           }
         }
+
       }
 
       animationFrameRef.current = requestAnimationFrame(loop);
