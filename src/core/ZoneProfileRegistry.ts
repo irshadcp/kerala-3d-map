@@ -27,7 +27,11 @@ export type KeralaAssetType =
   | 'hospital'
   | 'commercial_complex'
   | 'hotel'
-  | 'apartment_tower';
+  | 'apartment_tower'
+  | 'village_house'
+  | 'farm_plot'
+  | 'village_pond'
+  | 'canal_culvert';
 
 export interface ZoneProfile {
   type: KeralaZoneType;
@@ -65,6 +69,10 @@ export interface ZoneProfile {
     commercialComplex?: number;
     hotel?: number;
     apartmentTower?: number;
+    villageHouse?: number;
+    farmPlot?: number;
+    villagePond?: number;
+    canalCulvert?: number;
   };
 }
 
@@ -130,6 +138,9 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'street_light',
       'hotel',
       'apartment_tower',
+      'village_house',
+      'village_pond',
+      'canal_culvert',
     ],
     treeProfile: {
       baseDensity: 10,
@@ -149,6 +160,9 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       streetLight: 60,
       hotel: 900,
       apartmentTower: 650,
+      villageHouse: 180,
+      villagePond: 400,
+      canalCulvert: 200,
     },
   },
 
@@ -164,6 +178,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'chayakada',
       'open_well',
       'worship_place',
+      'village_house',
+      'farm_plot',
+      'village_pond',
+      'canal_culvert',
     ],
     treeProfile: {
       baseDensity: 14,
@@ -177,6 +195,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       chayakada: 280,
       openWell: 220,
       worshipPlace: 500,
+      villageHouse: 150,
+      farmPlot: 240,
+      villagePond: 360,
+      canalCulvert: 180,
     },
   },
 
@@ -251,7 +273,7 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
     nameEnglish: 'Paddy (Agricultural Wetlands / പാടം)',
     nameMalayalam: 'പാടശേഖരം (Paddy)',
     description: 'Vast open agricultural plains, mud dikes, irrigation streams',
-    allowedAssets: ['bus_stop', 'chayakada', 'open_well'],
+    allowedAssets: ['bus_stop', 'chayakada', 'open_well', 'farm_plot', 'canal_culvert'],
     treeProfile: {
       baseDensity: 3, // Very low in the field; only on dikes/bunds
       primarySpecies: 'coconut_palm',
@@ -264,6 +286,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       playground: 1500,
       chayakada: 500,
       openWell: 400,
+      farmPlot: 300,
+      canalCulvert: 200,
     },
   },
 
@@ -297,6 +321,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'chayakada',
       'forest_checkpost',
       'worship_place',
+      'farm_plot',
+      'canal_culvert',
     ],
     treeProfile: {
       baseDensity: 18,
@@ -308,6 +334,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       busStop: 400,
       playground: 1000,
       chayakada: 380,
+      farmPlot: 280,
+      canalCulvert: 220,
       checkpost: 800,
       worshipPlace: 800,
     },

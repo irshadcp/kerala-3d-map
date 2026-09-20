@@ -352,4 +352,273 @@ export class KeralaVillageGenerator {
     mosque.scale.set(1.35, 1.35, 1.35);
     return mosque;
   }
+
+  /**
+   * 6. Traditional Kerala Small Tiled House (ചെറിയ ഓടുമേഞ്ഞ വീട്)
+   * Terracotta sloped roof, front veranda (പൂമുഖം), compound wall (മതിൽ), and overhead Sintex water tank.
+   */
+  public static createSmallTiledHouseModel(): THREE.Group {
+    const house = new THREE.Group();
+    house.name = 'kerala_small_tiled_house';
+
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xfefce8 }); // Warm whitewash cream
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xb45309 }); // Terracotta tiles
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Dark teak timber
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x78716c }); // Laterite stone compound wall
+    const tankMat = new THREE.MeshLambertMaterial({ color: 0x0f172a }); // Black Sintex water tank
+    const metalMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
+
+    // Main House Block (Width: 6.5m, Depth: 5.5m, Height: 2.8m)
+    const bodyGeo = new THREE.BoxGeometry(6.5, 2.8, 5.5);
+    const body = new THREE.Mesh(bodyGeo, wallMat);
+    body.position.set(0, 1.4, -0.5);
+    house.add(body);
+
+    // Terracotta Sloped Tiled Roof (Hipped pitch roof)
+    const roofGeo = new THREE.ConeGeometry(5.2, 2.0, 4);
+    const roof = new THREE.Mesh(roofGeo, tileMat);
+    roof.position.set(0, 3.8, -0.5);
+    roof.rotation.y = Math.PI / 4;
+    roof.scale.set(1.3, 1, 1.15);
+    house.add(roof);
+
+    // Front Veranda / Poomukham (പൂമുഖം / വരാന്ത)
+    const verandaRoofGeo = new THREE.BoxGeometry(4.8, 0.12, 1.8);
+    const verandaRoof = new THREE.Mesh(verandaRoofGeo, tileMat);
+    verandaRoof.position.set(0, 2.4, 2.7);
+    verandaRoof.rotation.x = 0.22;
+    house.add(verandaRoof);
+
+    // Veranda timber pillars
+    for (const px of [-2.0, 2.0]) {
+      const pillarGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.2, 6);
+      const pillar = new THREE.Mesh(pillarGeo, woodMat);
+      pillar.position.set(px, 1.1, 3.2);
+      house.add(pillar);
+    }
+
+    // Front Wooden Door
+    const doorGeo = new THREE.BoxGeometry(1.2, 2.0, 0.1);
+    const door = new THREE.Mesh(doorGeo, woodMat);
+    door.position.set(0, 1.0, 2.26);
+    house.add(door);
+
+    // Front Shuttered Windows
+    for (const wx of [-1.8, 1.8]) {
+      const winGeo = new THREE.BoxGeometry(1.0, 1.2, 0.1);
+      const win = new THREE.Mesh(winGeo, woodMat);
+      win.position.set(wx, 1.4, 2.26);
+      house.add(win);
+    }
+
+    // Overhead Sintex Water Tank (വാട്ടർ ടാങ്ക്) on roof stand
+    const standGeo = new THREE.BoxGeometry(1.2, 0.8, 1.2);
+    const stand = new THREE.Mesh(standGeo, metalMat);
+    stand.position.set(2.2, 4.2, -1.8);
+    house.add(stand);
+
+    const tankGeo = new THREE.CylinderGeometry(0.55, 0.55, 1.1, 12);
+    const tank = new THREE.Mesh(tankGeo, tankMat);
+    tank.position.set(2.2, 5.15, -1.8);
+    house.add(tank);
+
+    // Laterite Stone Compound Wall (മതിൽ) enclosing front yard
+    const wallLGeo = new THREE.BoxGeometry(0.25, 0.9, 6.0);
+    const wallL = new THREE.Mesh(wallLGeo, stoneMat);
+    wallL.position.set(-3.8, 0.45, 1.2);
+    house.add(wallL);
+
+    const wallRGeo = new THREE.BoxGeometry(0.25, 0.9, 6.0);
+    const wallR = new THREE.Mesh(wallRGeo, stoneMat);
+    wallR.position.set(3.8, 0.45, 1.2);
+    house.add(wallR);
+
+    // Front wall with entrance gate gap
+    for (const fx of [-2.4, 2.4]) {
+      const wallFGeo = new THREE.BoxGeometry(2.6, 0.9, 0.25);
+      const wallF = new THREE.Mesh(wallFGeo, stoneMat);
+      wallF.position.set(fx, 0.45, 4.2);
+      house.add(wallF);
+
+      const gatePillarGeo = new THREE.BoxGeometry(0.4, 1.15, 0.4);
+      const gatePillar = new THREE.Mesh(gatePillarGeo, stoneMat);
+      gatePillar.position.set(fx > 0 ? 1.0 : -1.0, 0.58, 4.2);
+      house.add(gatePillar);
+    }
+
+    house.scale.set(1.4, 1.4, 1.4);
+    return house;
+  }
+
+  /**
+   * 7. Traditional Kerala Farm Building & Agricultural Plot (കളപ്പുര & കൃഷിയിടം)
+   * Cattle shed / barn (തൊഴുത്ത്), straw haystack (വൈക്കോൽ തുറു), plantain banana garden.
+   */
+  public static createFarmBuildingPlotModel(): THREE.Group {
+    const farm = new THREE.Group();
+    farm.name = 'kerala_farm_plot';
+
+    const timberMat = new THREE.MeshLambertMaterial({ color: 0x5c3d2e });
+    const thatchMat = new THREE.MeshLambertMaterial({ color: 0xa16207 }); // Dried thatch roof
+    const hayMat = new THREE.MeshLambertMaterial({ color: 0xd97706 }); // Golden straw
+    const soilMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Dark fertile soil
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x16a34a, side: THREE.DoubleSide }); // Plantain green
+    const stemMat = new THREE.MeshLambertMaterial({ color: 0x84cc16 });
+
+    // Farm Barn / Cattle Shed (തൊഴുത്ത് / കളപ്പുര)
+    for (const px of [-2.2, 2.2]) {
+      for (const pz of [-1.5, 1.5]) {
+        const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.4, 6);
+        const post = new THREE.Mesh(postGeo, timberMat);
+        post.position.set(px - 2.5, 1.2, pz);
+        farm.add(post);
+      }
+    }
+
+    // Sloped thatched roof
+    const shedRoofGeo = new THREE.ConeGeometry(3.2, 1.4, 4);
+    const shedRoof = new THREE.Mesh(shedRoofGeo, thatchMat);
+    shedRoof.position.set(-2.5, 2.9, 0);
+    shedRoof.rotation.y = Math.PI / 4;
+    shedRoof.scale.set(1.2, 1, 0.9);
+    farm.add(shedRoof);
+
+    // Traditional Kerala Haystack / Straw Stack (വൈക്കോൽ തുറു)
+    const hayBaseGeo = new THREE.CylinderGeometry(1.2, 1.4, 1.8, 10);
+    const hayBase = new THREE.Mesh(hayBaseGeo, hayMat);
+    hayBase.position.set(-2.5, 0.9, 3.2);
+    farm.add(hayBase);
+
+    const hayConeGeo = new THREE.ConeGeometry(1.2, 1.5, 10);
+    const hayCone = new THREE.Mesh(hayConeGeo, hayMat);
+    hayCone.position.set(-2.5, 2.55, 3.2);
+    farm.add(hayCone);
+
+    // Agricultural Plot: Tilled furrow soil bed (പച്ചക്കറി / വാഴത്തോട്ടം)
+    const soilBedGeo = new THREE.BoxGeometry(6.5, 0.08, 7.5);
+    const soilBed = new THREE.Mesh(soilBedGeo, soilMat);
+    soilBed.position.set(3.2, 0.04, 1.0);
+    farm.add(soilBed);
+
+    // 4 Plantain / Banana Trees (വാഴകൾ) in the plot
+    const plantainPositions = [
+      { x: 1.8, z: -1.5 },
+      { x: 4.5, z: -1.5 },
+      { x: 1.8, z: 2.5 },
+      { x: 4.5, z: 2.5 },
+    ];
+
+    for (const pt of plantainPositions) {
+      const stemGeo = new THREE.CylinderGeometry(0.1, 0.14, 2.0, 6);
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.set(pt.x, 1.0, pt.z);
+      farm.add(stem);
+
+      for (let l = 0; l < 5; l++) {
+        const la = (l / 5) * Math.PI * 2;
+        const leafGeo = new THREE.BoxGeometry(0.35, 0.04, 1.6);
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.position.set(pt.x + Math.sin(la) * 0.7, 2.1, pt.z + Math.cos(la) * 0.7);
+        leaf.rotation.y = la;
+        leaf.rotation.x = 0.5;
+        farm.add(leaf);
+      }
+    }
+
+    farm.scale.set(1.4, 1.4, 1.4);
+    return farm;
+  }
+
+  /**
+   * 8. Kerala Village Water Pond with Stone Steps (ഗ്രാമക്കുളം / പടവുകളുള്ള കുളം)
+   * Sunken stone reservoir, cut laterite bathing steps (കൽപ്പടവുകൾ), sparkling blue water.
+   */
+  public static createVillagePondModel(): THREE.Group {
+    const pond = new THREE.Group();
+    pond.name = 'kerala_village_pond';
+
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7,
+      roughness: 0.1,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.88,
+    });
+
+    // Sunken water body (width 8.5m x depth 6.5m)
+    const waterGeo = new THREE.BoxGeometry(8.5, 0.1, 6.5);
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.set(0, 0.08, 0);
+    pond.add(water);
+
+    // 3 Tiers of Cut Laterite Stone Steps (കൽപ്പടവുകൾ) surrounding water
+    for (let tier = 0; tier < 3; tier++) {
+      const stepWidth = 8.8 + tier * 0.6;
+      const stepDepth = 6.8 + tier * 0.6;
+      const stepH = 0.18 * (tier + 1);
+
+      for (const sz of [-stepDepth / 2, stepDepth / 2]) {
+        const edgeGeo = new THREE.BoxGeometry(stepWidth, 0.18, 0.35);
+        const edge = new THREE.Mesh(edgeGeo, stoneMat);
+        edge.position.set(0, stepH, sz);
+        pond.add(edge);
+      }
+
+      for (const sx of [-stepWidth / 2, stepWidth / 2]) {
+        const edgeGeo = new THREE.BoxGeometry(0.35, 0.18, stepDepth);
+        const edge = new THREE.Mesh(edgeGeo, stoneMat);
+        edge.position.set(sx, stepH, 0);
+        pond.add(edge);
+      }
+    }
+
+    // Outer laterite parapet border
+    const parapetGeo = new THREE.BoxGeometry(11.0, 0.45, 0.3);
+    const p1 = new THREE.Mesh(parapetGeo, stoneMat);
+    p1.position.set(0, 0.75, 4.5);
+    pond.add(p1);
+
+    const p2 = new THREE.Mesh(parapetGeo, stoneMat);
+    p2.position.set(0, 0.75, -4.5);
+    pond.add(p2);
+
+    pond.scale.set(1.4, 1.4, 1.4);
+    return pond;
+  }
+
+  /**
+   * 9. Small Canal Bridge / Culvert (ചെറിയ കലുങ്ക് / കനാൽ പാലം)
+   * Roadside culvert parapet walls with black and white warning hazard stripes.
+   */
+  public static createCanalBridgeModel(roadWidth = 7.0): THREE.Group {
+    const bridge = new THREE.Group();
+    bridge.name = 'kerala_canal_bridge';
+
+    const concreteMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+    const blackMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+    const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    const halfW = roadWidth / 2 + 0.3;
+
+    // Two parallel culvert parapets on left & right road edges
+    for (const side of [-halfW, halfW]) {
+      const wallGeo = new THREE.BoxGeometry(0.35, 0.9, 6.0);
+      const wall = new THREE.Mesh(wallGeo, concreteMat);
+      wall.position.set(side, 0.45, 0);
+      bridge.add(wall);
+
+      // Black and white safety stripes on top
+      for (let s = -2.5; s <= 2.5; s += 0.8) {
+        const isWhite = Math.round(s * 10) % 2 === 0;
+        const stripeGeo = new THREE.BoxGeometry(0.38, 0.12, 0.38);
+        const stripe = new THREE.Mesh(stripeGeo, isWhite ? whiteMat : blackMat);
+        stripe.position.set(side, 0.95, s);
+        bridge.add(stripe);
+      }
+    }
+
+    bridge.scale.set(1.4, 1.4, 1.4);
+    return bridge;
+  }
 }

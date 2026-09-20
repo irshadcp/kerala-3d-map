@@ -80,6 +80,80 @@ export class SnapTreeGenerator {
     return palm;
   }
 
+  /**
+   * Authentic Kerala Rubber Tree (റബ്ബർ മരം)
+   * Straight slender trunk with spiral tapping cut and latex collection cup (ചിരട്ട / കപ്പ്)
+   */
+  private static createRubberTreeModel(scale = 1.0): THREE.Group {
+    const tree = new THREE.Group();
+    tree.name = 'kerala_rubber_tree';
+
+    const barkMat = new THREE.MeshLambertMaterial({ color: 0x64748b }); // Greyish-brown rubber bark
+    const grooveMat = new THREE.MeshLambertMaterial({ color: 0x1e293b }); // Spiral tapping cut
+    const cupMat = new THREE.MeshLambertMaterial({ color: 0x334155 }); // Latex collection cup / coconut shell
+    const latexMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc }); // Milky white latex
+    const foliageMat1 = new THREE.MeshLambertMaterial({ color: 0x15803d }); // Deep rubber plantation green
+    const foliageMat2 = new THREE.MeshLambertMaterial({ color: 0x166534 });
+
+    // 1. Straight Slender Trunk (5.2m tall)
+    const trunkGeo = new THREE.CylinderGeometry(0.22 * scale, 0.32 * scale, 5.2 * scale, 7);
+    const trunk = new THREE.Mesh(trunkGeo, barkMat);
+    trunk.position.set(0, 2.6 * scale, 0);
+    tree.add(trunk);
+
+    // 2. Spiral Tapping Cut (റബ്ബർ വെട്ട് പാട്)
+    const cutGeo = new THREE.CylinderGeometry(0.28 * scale, 0.29 * scale, 0.25 * scale, 7, 1, true);
+    const cut = new THREE.Mesh(cutGeo, grooveMat);
+    cut.position.set(0, 1.6 * scale, 0);
+    cut.rotation.z = 0.35;
+    tree.add(cut);
+
+    // 3. Latex Collection Cup & Spout (ചിരട്ട / കപ്പും പാലും)
+    const cupGeo = new THREE.CylinderGeometry(0.12 * scale, 0.08 * scale, 0.16 * scale, 7);
+    const cup = new THREE.Mesh(cupGeo, cupMat);
+    cup.position.set(0.3 * scale, 1.25 * scale, 0);
+    tree.add(cup);
+
+    const latexGeo = new THREE.CircleGeometry(0.1 * scale, 6);
+    const latex = new THREE.Mesh(latexGeo, latexMat);
+    latex.rotation.x = -Math.PI / 2;
+    latex.position.set(0.3 * scale, 1.32 * scale, 0);
+    tree.add(latex);
+
+    // 4. Spreading Rubber Canopy (ഇലച്ചാർത്ത്)
+    const canopyGroup = new THREE.Group();
+    canopyGroup.position.set(0, 5.2 * scale, 0);
+
+    const mainFoliageGeo = new THREE.SphereGeometry(2.4 * scale, 8, 8);
+    mainFoliageGeo.scale(1.2, 0.8, 1.2);
+    const mainFoliage = new THREE.Mesh(mainFoliageGeo, foliageMat1);
+    mainFoliage.position.set(0, 0.8 * scale, 0);
+    canopyGroup.add(mainFoliage);
+
+    const subFoliageGeo = new THREE.SphereGeometry(1.8 * scale, 7, 7);
+    subFoliageGeo.scale(1.1, 0.7, 1.1);
+    const subFoliage = new THREE.Mesh(subFoliageGeo, foliageMat2);
+    subFoliage.position.set(0.6 * scale, 1.5 * scale, 0.3 * scale);
+    canopyGroup.add(subFoliage);
+
+    tree.add(canopyGroup);
+
+    // Soft ground shadow
+    const shadowGeo = new THREE.CircleGeometry(2.6 * scale, 12);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x112200,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    });
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.08;
+    tree.add(shadow);
+
+    return tree;
+  }
+
   public static generateTreesForChunk(
     chunkX: number,
     chunkZ: number,
@@ -136,6 +210,33 @@ export class SnapTreeGenerator {
         palm.position.set(rx, 0, rz);
         palm.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
         group.add(palm);
+      }
+
+      return group;
+    }
+
+    // If Rubber Plantation zone (റബ്ബർ തോട്ടം):
+    if (profile.treeProfile.primarySpecies === 'plantation_grid') {
+      const gridSpacing = 12.0;
+      const half = chunkSize / 2 - 8;
+
+      for (let ox = -half; ox <= half; ox += gridSpacing) {
+        for (let oz = -half; oz <= half; oz += gridSpacing) {
+          const seed = chunkX * 700 + chunkZ * 300 + Math.round(ox) * 17 + Math.round(oz);
+          const rx = centerX + ox + (seededRandom(seed) - 0.5) * 2.0;
+          const rz = centerZ + oz + (seededRandom(seed + 1) - 0.5) * 2.0;
+
+          // Check obstacle clearance
+          if (obstacleMap.isBlocked(rx, rz, 3.8)) {
+            continue;
+          }
+
+          const scale = (0.9 + seededRandom(seed + 2) * 0.25) * 1.35;
+          const rubberTree = this.createRubberTreeModel(scale);
+          rubberTree.position.set(rx, 0, rz);
+          rubberTree.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
+          group.add(rubberTree);
+        }
       }
 
       return group;

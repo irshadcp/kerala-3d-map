@@ -29,7 +29,8 @@ import {
   Landmark,
   Mountain,
   Waves,
-  Building2
+  Building2,
+  Home
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -332,6 +333,39 @@ function App() {
           >
             <Coffee size={13} className="text-amber-700" />
             <span>ചായക്കട</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__villageItems?.filter(
+                (i: any) =>
+                  i.type === 'village_house' ||
+                  i.type === 'farm_plot' ||
+                  i.type === 'village_pond' ||
+                  i.type === 'canal_culvert' ||
+                  i.type === 'open_well'
+              );
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__villageIdx || 0) % items.length;
+                  (window as any).__villageIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.5,
+                    pitch: 54,
+                    bearing: 25,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-800 cursor-pointer"
+            title="Jump to Nearest Kerala Village Element (ഓടിട്ട വീടുകൾ / കളപ്പുര / കുളം / കലുങ്ക്)"
+          >
+            <Home size={13} className="text-emerald-800" />
+            <span>ഗ്രാമം</span>
           </button>
 
           <button
