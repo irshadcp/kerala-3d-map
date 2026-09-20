@@ -211,6 +211,9 @@ export class PlaygroundGenerator {
 
     ground.add(bbGroup);
 
+    // Scale up for high visibility & clear prominence
+    ground.scale.set(1.25, 1.25, 1.25);
+
     this.cache = ground;
     return ground.clone(true);
   }

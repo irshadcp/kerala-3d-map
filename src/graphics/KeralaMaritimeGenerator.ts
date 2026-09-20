@@ -94,6 +94,7 @@ export class KeralaMaritimeGenerator {
     flag.position.set(0, 2.5, 7.5);
     boat.add(flag);
 
+    boat.scale.set(1.35, 1.35, 1.35);
     return boat;
   }
 
@@ -140,6 +141,7 @@ export class KeralaMaritimeGenerator {
     oar.rotation.y = 0.4;
     canoe.add(oar);
 
+    canoe.scale.set(1.45, 1.45, 1.45);
     return canoe;
   }
 
@@ -192,6 +194,7 @@ export class KeralaMaritimeGenerator {
       jetty.add(bollard);
     }
 
+    jetty.scale.set(1.35, 1.35, 1.35);
     return jetty;
   }
 
@@ -248,6 +251,7 @@ export class KeralaMaritimeGenerator {
       }
     }
 
+    market.scale.set(1.35, 1.35, 1.35);
     return market;
   }
 }

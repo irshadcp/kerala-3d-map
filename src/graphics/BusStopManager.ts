@@ -81,9 +81,8 @@ export class BusStopManager {
         const nx = -tz * side;
         const nz = tx * side;
 
-        // Shelter is 6.5m wide x 3.0m deep.
-        // Front curb sits 0.8m outside the road buffer, center is +2.3m
-        const centerDist = road.buffer + 2.3;
+        // Shelter is 6.5m wide x 3.0m deep (scaled 1.45x)
+        const centerDist = road.buffer + 3.2;
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
 
@@ -102,7 +101,7 @@ export class BusStopManager {
         );
         if (tooCloseCandidate) continue;
 
-        // Check if footprint (7m x 4m) is 100% free of buildings, other roads, and water
+        // Check if footprint is 100% free of buildings, other roads, and water
         if (
           obstacleMap.isStationFootprintClear(
             midX,
@@ -112,8 +111,8 @@ export class BusStopManager {
             tx,
             tz,
             centerDist,
-            3.6, // half-width along road
-            1.8, // half-depth perpendicular
+            5.2, // half-width along road
+            2.6, // half-depth perpendicular
             road.p1,
             road.p2
           )
@@ -123,7 +122,7 @@ export class BusStopManager {
 
           // 1. Register bus shelter footprint into obstacleMap
           // This guarantees TreeGenerator will NEVER place trees inside or near this shelter!
-          obstacleMap.registerCustomObstacle(cx - 4.5, cx + 4.5, cz - 2.8, cz + 2.8);
+          obstacleMap.registerCustomObstacle(cx - 5.8, cx + 5.8, cz - 3.8, cz + 3.8);
 
           // 2. Create and orient the 3D model
           const model = BusStopGenerator.createModel();

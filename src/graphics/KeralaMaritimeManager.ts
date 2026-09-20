@@ -93,7 +93,7 @@ export class KeralaMaritimeManager {
 
             const key = `hb_${Math.round(hbx / 10)}_${Math.round(hbz / 10)}`;
             if (!this.items.has(key)) {
-              obstacleMap.registerCustomObstacle(hbx - 8, hbx + 8, hbz - 8, hbz + 8);
+              obstacleMap.registerCustomObstacle(hbx - 11, hbx + 11, hbz - 11, hbz + 11);
 
               const model = KeralaMaritimeGenerator.createHouseboatModel();
               model.position.set(hbx, 0.05, hbz);
@@ -131,7 +131,7 @@ export class KeralaMaritimeManager {
 
             const key = `jetty_${Math.round(jx / 10)}_${Math.round(jz / 10)}`;
             if (!this.items.has(key)) {
-              obstacleMap.registerCustomObstacle(jx - 5, jx + 5, jz - 5, jz + 5);
+              obstacleMap.registerCustomObstacle(jx - 7, jx + 7, jz - 7, jz + 7);
 
               const model = KeralaMaritimeGenerator.createBoatJettyModel();
               model.position.set(jx, 0, jz);
@@ -204,10 +204,10 @@ export class KeralaMaritimeManager {
             const mx = midX - nx * 10;
             const mz = midZ - nz * 10;
 
-            if (obstacleMap.isFootprintClear(mx, mz, 5, 4)) {
+            if (obstacleMap.isFootprintClear(mx, mz, 7, 5.5)) {
               const key = `market_${Math.round(mx / 10)}_${Math.round(mz / 10)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(mx - 5, mx + 5, mz - 4, mz + 4);
+                obstacleMap.registerCustomObstacle(mx - 7, mx + 7, mz - 5.5, mz + 5.5);
 
                 const model = KeralaMaritimeGenerator.createFishMarketModel();
                 model.position.set(mx, 0, mz);

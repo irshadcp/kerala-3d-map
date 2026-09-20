@@ -66,6 +66,7 @@ export class KeralaUrbanGenerator {
     pedGreen.position.set(0.35, 2.32, 0.13);
     signal.add(pedGreen);
 
+    signal.scale.set(1.45, 1.45, 1.45);
     return signal;
   }
 
@@ -118,6 +119,7 @@ export class KeralaUrbanGenerator {
       billboard.add(lampHead);
     }
 
+    billboard.scale.set(1.35, 1.35, 1.35);
     return billboard;
   }
 
@@ -150,6 +152,7 @@ export class KeralaUrbanGenerator {
     head.position.set(1.2, 6.6, 0);
     light.add(head);
 
+    light.scale.set(1.35, 1.35, 1.35);
     return light;
   }
 }

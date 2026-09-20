@@ -86,7 +86,7 @@ export class PetrolStationManager {
         // Station dimensions: width = 24m (along road), depth = 18m (perpendicular to road).
         // Front curb must sit completely outside the road buffer with a clean 3.5m verge gap.
         // Station center is at distance: road.buffer + halfDepth (9m) + 3.5m verge = road.buffer + 12.5m
-        const centerDist = road.buffer + 13.5;
+        const centerDist = road.buffer + 16.5;
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
 
@@ -115,8 +115,8 @@ export class PetrolStationManager {
             tx,
             tz,
             centerDist,
-            12, // half-width
-            9,  // half-depth
+            16, // half-width
+            12, // half-depth
             road.p1,
             road.p2
           )
@@ -125,7 +125,7 @@ export class PetrolStationManager {
           if (this.stations.has(key)) continue;
 
           // 1. Register petrol station footprint into obstacleMap so trees are cleared/avoided!
-          obstacleMap.registerCustomObstacle(cx - 15, cx + 15, cz - 12, cz + 12);
+          obstacleMap.registerCustomObstacle(cx - 18, cx + 18, cz - 15, cz + 15);
 
           // 2. Create and orient the 3D model
           const model = PetrolStationGenerator.createModel();

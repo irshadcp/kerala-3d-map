@@ -28,6 +28,7 @@ export class KeralaHighlandGenerator {
       cluster.add(bush);
     }
 
+    cluster.scale.set(1.4, 1.4, 1.4);
     return cluster;
   }
 
@@ -82,6 +83,7 @@ export class KeralaHighlandGenerator {
     sign.position.set(-2.0, 2.2, 1.25);
     checkPost.add(sign);
 
+    checkPost.scale.set(1.4, 1.4, 1.4);
     return checkPost;
   }
 
@@ -134,6 +136,7 @@ export class KeralaHighlandGenerator {
     binoBody.position.set(0, 1.6, 0);
     viewpoint.add(binoBody);
 
+    viewpoint.scale.set(1.35, 1.35, 1.35);
     return viewpoint;
   }
 }

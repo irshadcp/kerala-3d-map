@@ -88,9 +88,8 @@ export class PlaygroundManager {
         const nx = -tz * side;
         const nz = tx * side;
 
-        // Playground dimensions: 44m wide (along road) x 28m deep (perpendicular).
-        // Set back nicely from the road into open ground: road.buffer + 14m (halfDepth) + 10m buffer = road.buffer + 24m
-        const centerDist = road.buffer + 24;
+        // Playground dimensions: scaled 1.25x (55m x 35m)
+        const centerDist = road.buffer + 28;
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
 
@@ -109,7 +108,7 @@ export class PlaygroundManager {
         );
         if (tooCloseCandidate) continue;
 
-        // Verify that the entire 46m x 30m field is 100% free of buildings, other roads, and water!
+        // Verify that the entire field is 100% free of buildings, other roads, and water!
         if (
           obstacleMap.isStationFootprintClear(
             midX,
@@ -119,8 +118,8 @@ export class PlaygroundManager {
             tx,
             tz,
             centerDist,
-            23, // half-width along road
-            15, // half-depth perpendicular
+            28, // half-width along road
+            18, // half-depth perpendicular
             road.p1,
             road.p2
           )
@@ -130,7 +129,7 @@ export class PlaygroundManager {
 
           // 1. Register playground footprint into obstacleMap
           // This automatically CLEARS all trees inside and around the sports field!
-          obstacleMap.registerCustomObstacle(cx - 24, cx + 24, cz - 16, cz + 16);
+          obstacleMap.registerCustomObstacle(cx - 30, cx + 30, cz - 20, cz + 20);
 
           // 2. Create and orient 3D playground model
           const model = PlaygroundGenerator.createModel();

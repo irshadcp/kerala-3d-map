@@ -131,7 +131,7 @@ export class SnapTreeGenerator {
         }
 
         const col = colors[i % colors.length];
-        const scale = 0.85 + seededRandom(seed + 2) * 0.35;
+        const scale = (0.85 + seededRandom(seed + 2) * 0.35) * 1.35;
         const palm = this.createCoconutPalmModel(col, scale);
         palm.position.set(rx, 0, rz);
         palm.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
@@ -143,8 +143,8 @@ export class SnapTreeGenerator {
 
     // Default & Urban/Suburban/Forest Lollipop & Tropical Trees using InstancedMesh
     const isForest = profile.treeProfile.primarySpecies === 'tropical_rainforest';
-    const canopyRadiusSmall = isForest ? 2.8 : 2.4;
-    const canopyRadiusLarge = isForest ? 4.2 : 3.6;
+    const canopyRadiusSmall = isForest ? 3.6 : 3.2;
+    const canopyRadiusLarge = isForest ? 5.2 : 4.6;
 
     const canopyGeoSmall = new THREE.SphereGeometry(canopyRadiusSmall, 10, 10);
     canopyGeoSmall.scale(1, isForest ? 1.5 : 1.35, 1);
@@ -159,8 +159,8 @@ export class SnapTreeGenerator {
     const canopyMat = new THREE.MeshLambertMaterial();
     const trunkMat = new THREE.MeshLambertMaterial({ color: isForest ? '#5c4033' : '#8d6e63' });
 
-    const trunkGeoSmall = new THREE.CylinderGeometry(0.3, 0.45, isForest ? 4.0 : 3.2, 6);
-    const trunkGeoLarge = new THREE.CylinderGeometry(0.45, 0.65, isForest ? 5.2 : 4.2, 6);
+    const trunkGeoSmall = new THREE.CylinderGeometry(0.35, 0.55, isForest ? 5.0 : 4.0, 6);
+    const trunkGeoLarge = new THREE.CylinderGeometry(0.55, 0.8, isForest ? 6.5 : 5.4, 6);
 
     const shadowGeo = new THREE.CircleGeometry(1, 12);
     const shadowMat = new THREE.MeshBasicMaterial({
@@ -195,22 +195,24 @@ export class SnapTreeGenerator {
       const col = seededRandom(seed + 3) > 0.5 ? color1 : color2;
 
       if (isLarge) {
-        dummy.position.set(rx, isForest ? 2.6 : 2.1, rz);
+        const trunkH = isForest ? 6.5 : 5.4;
+        dummy.position.set(rx, trunkH / 2, rz);
         dummy.updateMatrix();
         iTrunkLarge.setMatrixAt(largeIdx, dummy.matrix);
 
-        dummy.position.set(rx, (isForest ? 5.2 : 4.2) + 3.2, rz);
+        dummy.position.set(rx, trunkH + 3.6, rz);
         dummy.updateMatrix();
         iCanopyLarge.setMatrixAt(largeIdx, dummy.matrix);
         iCanopyLarge.setColorAt(largeIdx, col);
 
         largeIdx++;
       } else {
-        dummy.position.set(rx, isForest ? 2.0 : 1.6, rz);
+        const trunkH = isForest ? 5.0 : 4.0;
+        dummy.position.set(rx, trunkH / 2, rz);
         dummy.updateMatrix();
         iTrunkSmall.setMatrixAt(smallIdx, dummy.matrix);
 
-        dummy.position.set(rx, (isForest ? 4.0 : 3.2) + 2.2, rz);
+        dummy.position.set(rx, trunkH + 2.6, rz);
         dummy.updateMatrix();
         iCanopySmall.setMatrixAt(smallIdx, dummy.matrix);
         iCanopySmall.setColorAt(smallIdx, col);
@@ -218,7 +220,7 @@ export class SnapTreeGenerator {
         smallIdx++;
       }
 
-      const shadowRadius = isLarge ? 4.2 : 2.8;
+      const shadowRadius = isLarge ? 5.4 : 3.8;
       dummy.position.set(rx, 0.08, rz);
       dummy.rotation.x = -Math.PI / 2;
       dummy.scale.set(shadowRadius, shadowRadius, 1);

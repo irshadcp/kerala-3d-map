@@ -216,6 +216,9 @@ export class PetrolStationGenerator {
 
     station.add(totemGroup);
 
+    // Scale up for high visibility & clear prominence
+    station.scale.set(1.35, 1.35, 1.35);
+
     this.cache = station;
     return station.clone(true);
   }

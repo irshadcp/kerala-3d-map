@@ -173,6 +173,9 @@ export class BusStopGenerator {
 
     shelter.add(totemGroup);
 
+    // Scale up for high visibility & clear prominence
+    shelter.scale.set(1.45, 1.45, 1.45);
+
     this.cache = shelter;
     return shelter.clone(true);
   }

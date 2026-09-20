@@ -79,8 +79,8 @@ export class KeralaVillageManager {
         const nx = -tz * side;
         const nz = tx * side;
 
-        // 1. Check for Roadside Chayakada (ചായക്കട)
-        const chayaDist = road.buffer + 2.8;
+        // 1. Check for Roadside Chayakada (ചായക്കട - scaled 1.45x)
+        const chayaDist = road.buffer + 3.8;
         const cx = midX + nx * chayaDist;
         const cz = midZ + nz * chayaDist;
 
@@ -103,15 +103,15 @@ export class KeralaVillageManager {
                 tx,
                 tz,
                 chayaDist,
-                2.4, // half-width
-                1.8, // half-depth
+                3.5, // half-width
+                2.6, // half-depth
                 road.p1,
                 road.p2
               )
             ) {
               const key = `chaya_${Math.round(cx / 5)}_${Math.round(cz / 5)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(cx - 3, cx + 3, cz - 2.5, cz + 2.5);
+                obstacleMap.registerCustomObstacle(cx - 4.2, cx + 4.2, cz - 3.2, cz + 3.2);
 
                 const model = KeralaVillageGenerator.createChayakadaModel();
                 model.position.set(cx, 0, cz);
@@ -138,8 +138,8 @@ export class KeralaVillageManager {
           }
         }
 
-        // 2. Check for Traditional Open Well (തുറന്ന കിണർ) in village yards
-        const wellDist = road.buffer + 8.5;
+        // 2. Check for Traditional Open Well (തുറന്ന കിണർ - scaled 1.5x)
+        const wellDist = road.buffer + 9.5;
         const wx = midX + nx * wellDist;
         const wz = midZ + nz * wellDist;
 
@@ -159,15 +159,15 @@ export class KeralaVillageManager {
                 tx,
                 tz,
                 wellDist,
-                2.0,
-                2.0,
+                3.0,
+                3.0,
                 road.p1,
                 road.p2
               )
             ) {
               const key = `well_${Math.round(wx / 5)}_${Math.round(wz / 5)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(wx - 2.5, wx + 2.5, wz - 2.5, wz + 2.5);
+                obstacleMap.registerCustomObstacle(wx - 3.5, wx + 3.5, wz - 3.5, wz + 3.5);
 
                 const model = KeralaVillageGenerator.createOpenWellModel();
                 model.position.set(wx, 0, wz);
@@ -191,8 +191,8 @@ export class KeralaVillageManager {
           }
         }
 
-        // 3. Cultural Places of Worship (ക്ഷേത്രം / പള്ളി / മസ്ജിദ്)
-        const worshipDist = road.buffer + 14.0;
+        // 3. Cultural Places of Worship (ക്ഷേത്രം / പള്ളി / മസ്ജിദ് - scaled 1.35x)
+        const worshipDist = road.buffer + 16.5;
         const sx = midX + nx * worshipDist;
         const sz = midZ + nz * worshipDist;
 
@@ -212,15 +212,15 @@ export class KeralaVillageManager {
                 tx,
                 tz,
                 worshipDist,
-                5.0, // half-width
-                5.0, // half-depth
+                7.0, // half-width
+                7.0, // half-depth
                 road.p1,
                 road.p2
               )
             ) {
               const key = `worship_${Math.round(sx / 8)}_${Math.round(sz / 8)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(sx - 5.5, sx + 5.5, sz - 5.5, sz + 5.5);
+                obstacleMap.registerCustomObstacle(sx - 7.5, sx + 7.5, sz - 7.5, sz + 7.5);
 
                 const worshipTypeIdx = worshipCounter++ % 3;
                 let model: THREE.Group;

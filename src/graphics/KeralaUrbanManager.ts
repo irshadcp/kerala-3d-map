@@ -93,12 +93,12 @@ export class KeralaUrbanManager {
             // Position on corner curb just outside road buffer
             const nx = -tz;
             const nz = tx;
-            const sx = endpoint.x + nx * (road.buffer + 1.2);
-            const sz = endpoint.z + nz * (road.buffer + 1.2);
+            const sx = endpoint.x + nx * (road.buffer + 1.8);
+            const sz = endpoint.z + nz * (road.buffer + 1.8);
 
             const key = `signal_${Math.round(sx / 6)}_${Math.round(sz / 6)}`;
             if (!this.items.has(key)) {
-              obstacleMap.registerCustomObstacle(sx - 2, sx + 2, sz - 2, sz + 2);
+              obstacleMap.registerCustomObstacle(sx - 3.2, sx + 3.2, sz - 3.2, sz + 3.2);
 
               const model = KeralaUrbanGenerator.createTrafficSignalModel();
               model.position.set(sx, 0, sz);
@@ -125,7 +125,7 @@ export class KeralaUrbanManager {
         }
       }
 
-      // 2. Highway Advertising Billboards / Hoardings (ഹോർഡിംഗുകൾ)
+      // 2. Highway Advertising Billboards / Hoardings (ഹോർഡിംഗുകൾ - scaled 1.35x)
       const midX = (road.p1.x + road.p2.x) / 2;
       const midZ = (road.p1.z + road.p2.z) / 2;
 
@@ -133,7 +133,7 @@ export class KeralaUrbanManager {
         const nx = -tz * side;
         const nz = tx * side;
 
-        const bbDist = road.buffer + 5.5;
+        const bbDist = road.buffer + 7.0;
         const bx = midX + nx * bbDist;
         const bz = midZ + nz * bbDist;
 
@@ -156,15 +156,15 @@ export class KeralaUrbanManager {
                 tx,
                 tz,
                 bbDist,
-                4.5,
-                2.0,
+                6.0,
+                2.5,
                 road.p1,
                 road.p2
               )
             ) {
               const key = `bb_${Math.round(bx / 8)}_${Math.round(bz / 8)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(bx - 4.5, bx + 4.5, bz - 2, bz + 2);
+                obstacleMap.registerCustomObstacle(bx - 6.0, bx + 6.0, bz - 2.8, bz + 2.8);
 
                 const model = KeralaUrbanGenerator.createBillboardModel();
                 model.position.set(bx, 0, bz);

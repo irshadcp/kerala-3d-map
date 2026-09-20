@@ -68,8 +68,8 @@ export class KeralaHighlandManager {
         const nx = -tz * side;
         const nz = tx * side;
 
-        // 1. Forest Department Check Post (ഫോറസ്റ്റ് ചെക്ക് പോസ്റ്റ്)
-        const checkpostDist = road.buffer + 2.0;
+        // 1. Forest Department Check Post (ഫോറസ്റ്റ് ചെക്ക് പോസ്റ്റ് - scaled 1.4x)
+        const checkpostDist = road.buffer + 3.0;
         const cx = midX + nx * checkpostDist;
         const cz = midZ + nz * checkpostDist;
 
@@ -92,15 +92,15 @@ export class KeralaHighlandManager {
                 tx,
                 tz,
                 checkpostDist,
-                3.2,
-                2.2,
+                4.5,
+                3.0,
                 road.p1,
                 road.p2
               )
             ) {
               const key = `cp_${Math.round(cx / 8)}_${Math.round(cz / 8)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(cx - 3.5, cx + 3.5, cz - 2.5, cz + 2.5);
+                obstacleMap.registerCustomObstacle(cx - 5.0, cx + 5.0, cz - 3.5, cz + 3.5);
 
                 const model = KeralaHighlandGenerator.createCheckPostModel();
                 model.position.set(cx, 0, cz);
@@ -126,8 +126,8 @@ export class KeralaHighlandManager {
           }
         }
 
-        // 2. Mountain Viewpoint (വ്യൂ പോയിന്റ്)
-        const viewpointDist = road.buffer + 10.0;
+        // 2. Mountain Viewpoint (വ്യൂ പോയിന്റ് - scaled 1.35x)
+        const viewpointDist = road.buffer + 13.0;
         const vx = midX + nx * viewpointDist;
         const vz = midZ + nz * viewpointDist;
 
@@ -147,15 +147,15 @@ export class KeralaHighlandManager {
                 tx,
                 tz,
                 viewpointDist,
-                4.5,
-                4.5,
+                6.2,
+                6.2,
                 road.p1,
                 road.p2
               )
             ) {
               const key = `vp_${Math.round(vx / 8)}_${Math.round(vz / 8)}`;
               if (!this.items.has(key)) {
-                obstacleMap.registerCustomObstacle(vx - 5, vx + 5, vz - 5, vz + 5);
+                obstacleMap.registerCustomObstacle(vx - 6.5, vx + 6.5, vz - 6.5, vz + 6.5);
 
                 const model = KeralaHighlandGenerator.createViewpointModel();
                 model.position.set(vx, 0, vz);

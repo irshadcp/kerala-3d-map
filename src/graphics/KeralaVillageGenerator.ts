@@ -98,6 +98,7 @@ export class KeralaVillageGenerator {
     board.position.set(0, 2.3, 1.15);
     shop.add(board);
 
+    shop.scale.set(1.45, 1.45, 1.45);
     return shop;
   }
 
@@ -164,6 +165,7 @@ export class KeralaVillageGenerator {
     bucket.position.set(0, 0.55, 0);
     well.add(bucket);
 
+    well.scale.set(1.5, 1.5, 1.5);
     return well;
   }
 
@@ -228,6 +230,7 @@ export class KeralaVillageGenerator {
     lampDish.position.set(0, 1.95, 4.5);
     temple.add(lampDish);
 
+    temple.scale.set(1.35, 1.35, 1.35);
     return temple;
   }
 
@@ -288,6 +291,7 @@ export class KeralaVillageGenerator {
     door.position.set(0, 1.2, 4.75);
     church.add(door);
 
+    church.scale.set(1.35, 1.35, 1.35);
     return church;
   }
 
@@ -345,6 +349,7 @@ export class KeralaVillageGenerator {
     cres.position.set(3.0, 8.2, 3.0);
     mosque.add(cres);
 
+    mosque.scale.set(1.35, 1.35, 1.35);
     return mosque;
   }
 }
