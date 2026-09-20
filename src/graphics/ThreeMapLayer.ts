@@ -12,6 +12,7 @@ import { KeralaMaritimeManager } from './KeralaMaritimeManager';
 import { KeralaHighlandManager } from './KeralaHighlandManager';
 import { KeralaUrbanManager } from './KeralaUrbanManager';
 import { KeralaCoastalManager } from './KeralaCoastalManager';
+import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -32,6 +33,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private highlandManager!: KeralaHighlandManager;
   private urbanManager!: KeralaUrbanManager;
   private coastalManager!: KeralaCoastalManager;
+  private roadsideManager!: KeralaRoadsideManager;
 
   private originLat: number;
   private originLng: number;
@@ -167,6 +169,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.highlandManager = new KeralaHighlandManager(this.scene);
     this.urbanManager = new KeralaUrbanManager(this.scene);
     this.coastalManager = new KeralaCoastalManager(this.scene);
+    this.roadsideManager = new KeralaRoadsideManager(this.scene);
 
     this.updateModelTransform(this.originLat, this.originLng);
     
@@ -198,6 +201,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         // 8. Place Kerala Coastal elements (Seawalls, Breakwaters, Fishing Houses, Drying Racks, Harbours)
         this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng);
 
+        // 9. Place Kerala Roadside elements (ConcretePole, StreetLight, RoadSign, BusStop, SmallShop, TeaShop, Bakery, Pharmacy, CompoundWall, Gate, Drain, Culvert, Bridge, Billboard, AutoStand)
+        this.roadsideManager.update(this.obstacleMap, this.originLat, this.originLng);
+
         // Expose placed landmarks globally for UI navigation and inspection
         if (typeof window !== 'undefined') {
           (window as any).__petrolStations = this.petrolStationManager.placedStations;
@@ -208,6 +214,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           (window as any).__highlandItems = this.highlandManager.placedItems;
           (window as any).__urbanItems = this.urbanManager.placedItems;
           (window as any).__coastalItems = this.coastalManager.placedItems;
+          (window as any).__roadsideItems = this.roadsideManager.placedItems;
         }
 
         // 9. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!

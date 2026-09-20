@@ -31,7 +31,8 @@ import {
   Waves,
   Building2,
   Home,
-  Sprout
+  Sprout,
+  Store
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -415,6 +416,32 @@ function App() {
           >
             <Sprout size={13} className="text-green-700" />
             <span>പാടം / തോട്ടം</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__roadsideItems;
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__roadsideIdx || 0) % items.length;
+                  (window as any).__roadsideIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.6,
+                    pitch: 56,
+                    bearing: 30,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-amber-700 cursor-pointer"
+            title="Jump to Nearest Kerala Roadside Element (പോസ്റ്റ് / സ്ട്രീറ്റ് ലൈറ്റ് / ബോർഡ് / ഓട്ടോ സ്റ്റാൻഡ് / ബേക്കറി / ഫാർമസി / കലുങ്ക് / ഓട)"
+          >
+            <Store size={13} className="text-amber-700" />
+            <span>റോഡരികം</span>
           </button>
 
           <button
