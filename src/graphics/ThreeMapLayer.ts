@@ -15,6 +15,7 @@ import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
 import { BuildingFacadeManager } from './BuildingFacadeManager';
+import { RemotePlayerManager } from './RemotePlayerManager';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -37,6 +38,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
   private buildingFacadeManager!: BuildingFacadeManager;
+  public remotePlayerManager!: RemotePlayerManager;
+  public threeDGroup!: THREE.Group;
+  public is3DActive: boolean = true;
+  private _idleRepaintScheduled: boolean = false;
+  private regenerateTimer: number | null = null;
 
   private originLat: number;
   private originLng: number;
@@ -110,81 +116,102 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     this.scene.add(this.playerAvatarGroup);
 
-    this.petrolStationManager = new PetrolStationManager(this.scene);
-    this.busStopManager = new BusStopManager(this.scene);
-    this.playgroundManager = new PlaygroundManager(this.scene);
-    this.villageManager = new KeralaVillageManager(this.scene);
-    this.maritimeManager = new KeralaMaritimeManager(this.scene);
-    this.highlandManager = new KeralaHighlandManager(this.scene);
-    this.urbanManager = new KeralaUrbanManager(this.scene);
-    this.coastalManager = new KeralaCoastalManager(this.scene);
-    this.roadsideManager = new KeralaRoadsideManager(this.scene);
-    this.buildingFacadeManager = new BuildingFacadeManager(this.scene);
+    // Dedicated 3D procedural environment group (can be toggled off at low zoom for zero load)
+    this.threeDGroup = new THREE.Group();
+    this.threeDGroup.name = '3d_procedural_environment';
+    this.scene.add(this.threeDGroup);
+
+    const envGroup = this.threeDGroup as unknown as THREE.Scene;
+    this.petrolStationManager = new PetrolStationManager(envGroup);
+    this.busStopManager = new BusStopManager(envGroup);
+    this.playgroundManager = new PlaygroundManager(envGroup);
+    this.villageManager = new KeralaVillageManager(envGroup);
+    this.maritimeManager = new KeralaMaritimeManager(envGroup);
+    this.highlandManager = new KeralaHighlandManager(envGroup);
+    this.urbanManager = new KeralaUrbanManager(envGroup);
+    this.coastalManager = new KeralaCoastalManager(envGroup);
+    this.roadsideManager = new KeralaRoadsideManager(envGroup);
+    this.buildingFacadeManager = new BuildingFacadeManager(envGroup);
+    this.remotePlayerManager = new RemotePlayerManager(this.scene);
+
+    if (typeof window !== 'undefined') {
+      (window as any).__remotePlayerManager = this.remotePlayerManager;
+    }
 
     this.updateModelTransform(this.originLat, this.originLng);
     
     // Automatically rebuild obstacles and re-evaluate trees whenever vector tiles load or camera settles
+    // ONLY executed when in 3D exploration mode (zoom >= 16.2) to prevent mobile lag and heat!
     const reloadObstaclesAndRegenerate = () => {
-      const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
-      if (refreshed) {
-        // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
-        this.petrolStationManager.update(this.obstacleMap, this.originLat, this.originLng);
+      if (!this.is3DActive) return;
+      if (this.map && this.map.getZoom() < 16.2) return;
 
-        // 2. Place roadside bus stops in free spaces & register footprints in obstacleMap
-        this.busStopManager.update(this.obstacleMap, this.originLat, this.originLng);
+      if (this.regenerateTimer) clearTimeout(this.regenerateTimer);
+      this.regenerateTimer = window.setTimeout(() => {
+        if (!this.is3DActive) return;
+        if (this.map && this.map.getZoom() < 16.2) return;
 
-        // 3. Place neighborhood sports playgrounds in free spaces away from highway junctions
-        this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng);
+        const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
+        if (refreshed) {
+          // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
+          this.petrolStationManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 4. Place Kerala Village & Cultural elements (Chayakada, Wells, Temples, Churches, Mosques)
-        this.villageManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 2. Place roadside bus stops in free spaces & register footprints in obstacleMap
+          this.busStopManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 5. Place Kerala Maritime & Backwater elements (Houseboats, Fishing Boats, Jetties, Fish Markets)
-        this.maritimeManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 3. Place neighborhood sports playgrounds in free spaces away from highway junctions
+          this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 6. Place Kerala Highland & Western Ghats elements (Tea plantations, Checkposts, Viewpoints)
-        this.highlandManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 4. Place Kerala Village & Cultural elements (Chayakada, Wells, Temples, Churches, Mosques)
+          this.villageManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 7. Place Kerala Urban elements (Traffic signals, Highway Billboards)
-        this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 5. Place Kerala Maritime & Backwater elements (Houseboats, Fishing Boats, Jetties, Fish Markets)
+          this.maritimeManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 8. Place Kerala Coastal elements (Seawalls, Breakwaters, Fishing Houses, Drying Racks, Harbours)
-        this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 6. Place Kerala Highland & Western Ghats elements (Tea plantations, Checkposts, Viewpoints)
+          this.highlandManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 9. Place Kerala Roadside elements (ConcretePole, StreetLight, RoadSign, BusStop, SmallShop, TeaShop, Bakery, Pharmacy, CompoundWall, Gate, Drain, Culvert, Bridge, Billboard, AutoStand)
-        this.roadsideManager.update(this.obstacleMap, this.originLat, this.originLng);
+          // 7. Place Kerala Urban elements (Traffic signals, Highway Billboards)
+          this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // Expose placed landmarks globally for UI navigation and inspection
-        if (typeof window !== 'undefined') {
-          (window as any).__petrolStations = this.petrolStationManager.placedStations;
-          (window as any).__busStops = this.busStopManager.placedStops;
-          (window as any).__playgrounds = this.playgroundManager.placedPlaygrounds;
-          (window as any).__villageItems = this.villageManager.placedItems;
-          (window as any).__maritimeItems = this.maritimeManager.placedItems;
-          (window as any).__highlandItems = this.highlandManager.placedItems;
-          (window as any).__urbanItems = this.urbanManager.placedItems;
-          (window as any).__coastalItems = this.coastalManager.placedItems;
-          (window as any).__roadsideItems = this.roadsideManager.placedItems;
+          // 8. Place Kerala Coastal elements (Seawalls, Breakwaters, Fishing Houses, Drying Racks, Harbours)
+          this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+          // 9. Place Kerala Roadside elements
+          this.roadsideManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+          // Expose placed landmarks globally for UI navigation and inspection
+          if (typeof window !== 'undefined') {
+            (window as any).__petrolStations = this.petrolStationManager.placedStations;
+            (window as any).__busStops = this.busStopManager.placedStops;
+            (window as any).__playgrounds = this.playgroundManager.placedPlaygrounds;
+            (window as any).__villageItems = this.villageManager.placedItems;
+            (window as any).__maritimeItems = this.maritimeManager.placedItems;
+            (window as any).__highlandItems = this.highlandManager.placedItems;
+            (window as any).__urbanItems = this.urbanManager.placedItems;
+            (window as any).__coastalItems = this.coastalManager.placedItems;
+            (window as any).__roadsideItems = this.roadsideManager.placedItems;
+          }
+
+          // 10. Regenerate trees strictly avoiding obstacles
+          for (const group of this.loadedChunks.values()) {
+            this.threeDGroup.remove(group);
+            group.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh;
+                mesh.geometry?.dispose();
+              }
+            });
+          }
+          this.loadedChunks.clear();
+
+          const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+          this.updateChunks(local.x, local.z);
+
+          // 11. Generate ultra-lightweight windows, doors, and shutters on building blocks
+          this.buildingFacadeManager.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z, true);
         }
-
-        // 10. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
-        for (const group of this.loadedChunks.values()) {
-          this.scene.remove(group);
-          group.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
-              mesh.geometry?.dispose();
-            }
-          });
-        }
-        this.loadedChunks.clear();
-
-        const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
-        this.updateChunks(local.x, local.z);
-
-        // 11. Generate ultra-lightweight windows, doors, and shutters on building blocks
-        this.buildingFacadeManager.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z, true);
-      }
+      }, 150);
     };
 
     map.on('idle', reloadObstaclesAndRegenerate);
@@ -329,9 +356,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.coastalManager?.clear();
     this.roadsideManager?.clear();
     this.buildingFacadeManager?.clear();
+    this.remotePlayerManager?.onOriginChange(lat, lng);
 
     for (const group of this.loadedChunks.values()) {
-      this.scene.remove(group);
+      this.threeDGroup.remove(group);
       group.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
@@ -358,6 +386,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   }
 
   private updateChunks(playerX: number, playerZ: number) {
+    // Only generate trees if in 3D exploration mode (zoom >= 16.2)
+    if (!this.is3DActive || (this.map && this.map.getZoom() < 16.2)) return;
+
     // Only generate trees once obstacle map has vector tile data!
     if (!this.obstacleMap.isReady) {
       this.obstacleMap.update(this.map, this.originLat, this.originLng);
@@ -389,12 +420,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
               chunkX,
               chunkZ,
               this.CHUNK_SIZE,
-              this.scene,
+              this.threeDGroup as unknown as THREE.Scene,
               this.obstacleMap,
               this.originLat,
               this.originLng
             );
-            this.scene.add(chunkGroup);
+            this.threeDGroup.add(chunkGroup);
             this.loadedChunks.set(key, chunkGroup);
           }
         }
@@ -404,7 +435,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     // Unload distant chunks
     for (const [key, group] of this.loadedChunks.entries()) {
       if (!activeChunks.has(key)) {
-        this.scene.remove(group);
+        this.threeDGroup.remove(group);
         group.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
@@ -588,6 +619,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.maritimeManager.updateFloatingAnimation(now);
     }
 
+    // Update remote multiplayer characters & proximity audio
+    if (this.remotePlayerManager) {
+      this.remotePlayerManager.update(delta, this.currentPos.x, this.currentPos.y);
+    }
+
     // Sync MapLibre Camera to Three.js Projection
     this._rotationX.makeRotationAxis(new THREE.Vector3(1, 0, 0), this.modelTransform.rotateX);
     this._rotationY.makeRotationAxis(new THREE.Vector3(0, 1, 0), this.modelTransform.rotateY);
@@ -617,7 +653,38 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     this.renderer.resetState();
     this.renderer.render(this.scene, this.camera);
-    this.map.triggerRepaint();
+
+    // Thermal & Battery Optimization:
+    // Only repaint every frame if character is actively walking or multiplayer peers moving
+    if (this.isWalking || (this.remotePlayerManager && this.remotePlayerManager.getPlayerCount() > 0)) {
+      this.map.triggerRepaint();
+    } else if (this.is3DActive) {
+      // In 3D mode when idle, cap gentle animation tick (~25 FPS) for water waves / breathing
+      if (!this._idleRepaintScheduled) {
+        this._idleRepaintScheduled = true;
+        setTimeout(() => {
+          this._idleRepaintScheduled = false;
+          if (this.map) this.map.triggerRepaint();
+        }, 40);
+      }
+    }
+    // In 2D overview mode (zoom < 16.2): ZERO idle repaints! GPU stays completely cold!
+  }
+
+  public set3DMode(is3D: boolean) {
+    if (this.is3DActive === is3D) return;
+    this.is3DActive = is3D;
+    if (this.threeDGroup) {
+      this.threeDGroup.visible = is3D;
+    }
+    if (is3D) {
+      const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+      this.updateChunks(local.x, local.z);
+      this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z);
+      this.map?.triggerRepaint();
+    } else {
+      this.map?.triggerRepaint();
+    }
   }
 }
 

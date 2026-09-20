@@ -1,9 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import SnapMapCanvas, { SnapMapCanvasRef, WidenLevel } from './components/SnapMapCanvas';
 import { LocationPreset } from './config/gameConfig';
 import GlobalSearchModal from './components/GlobalSearchModal';
 import VirtualJoystick from './components/VirtualJoystick';
 import GamerCameraControls from './components/GamerCameraControls';
+import WelcomeOnboardingModal, { OnboardingResult } from './components/WelcomeOnboardingModal';
+import LivePlayersOverlay from './components/LivePlayersOverlay';
+import VoiceControls from './components/VoiceControls';
+import { MultiplayerManager, LocalUserProfile } from './network/MultiplayerManager';
+import { RemotePlayerData } from './graphics/RemotePlayerManager';
 import { GeocodingResult } from './services/geocodingService';
 import {
   MapPin,
@@ -59,7 +64,106 @@ function App() {
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
   const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
 
+  // User profile state (ephemeral or remembered in localStorage for convenience)
+  const [userProfile, setUserProfile] = useState<LocalUserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('kerala_3d_user_profile');
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(!userProfile);
+  const [remotePlayersList, setRemotePlayersList] = useState<RemotePlayerData[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const multiplayerRef = useRef<MultiplayerManager | null>(null);
+
   const canvasRef = useRef<SnapMapCanvasRef>(null);
+
+  // Initialize or reconfigure MultiplayerManager when userProfile changes
+  useEffect(() => {
+    if (!userProfile) return;
+
+    if (multiplayerRef.current) {
+      multiplayerRef.current.destroy();
+      multiplayerRef.current = null;
+    }
+
+    const mgr = new MultiplayerManager(
+      userProfile,
+      currentLocation.lat,
+      currentLocation.lng
+    );
+    multiplayerRef.current = mgr;
+
+    mgr.onPlayerUpdate = (player) => {
+      const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
+      if (threeLayer?.remotePlayerManager) {
+        threeLayer.remotePlayerManager.updatePlayer(
+          player,
+          threeLayer.playerLat || currentLocation.lat,
+          threeLayer.playerLng || currentLocation.lng
+        );
+      }
+      setRemotePlayersList(Array.from(mgr.remotePlayers.values()));
+    };
+
+    mgr.onPlayerRemove = (id) => {
+      const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
+      if (threeLayer?.remotePlayerManager) {
+        threeLayer.remotePlayerManager.removePlayer(id);
+      }
+      setRemotePlayersList(Array.from(mgr.remotePlayers.values()));
+    };
+
+    mgr.onRemoteStream = (peerId, stream, audioCtx) => {
+      const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
+      if (threeLayer?.remotePlayerManager) {
+        threeLayer.remotePlayerManager.registerAudioStream(peerId, stream, audioCtx);
+      }
+    };
+
+    mgr.onMuteStateChange = (muted) => {
+      setIsMuted(muted);
+    };
+
+    return () => {
+      mgr.destroy();
+      multiplayerRef.current = null;
+    };
+  }, [userProfile?.id]);
+
+  const handleOnboardingComplete = (res: OnboardingResult) => {
+    const profile: LocalUserProfile = {
+      id: 'kerala_' + Math.random().toString(36).substring(2, 9),
+      name: res.name,
+      district: res.district,
+    };
+    try {
+      localStorage.setItem('kerala_3d_user_profile', JSON.stringify(profile));
+    } catch (_) {}
+    setUserProfile(profile);
+    setIsOnboardingOpen(false);
+
+    // Spawn at detected GPS coordinates or district center!
+    setCurrentLocation({
+      id: 'user_spawn',
+      name: res.locationName,
+      subname: `${res.district}, Kerala`,
+      lat: res.lat,
+      lng: res.lng,
+      zoom: 18.2,
+      pitch: 70,
+      bearing: 0,
+      weather: 'Sunny',
+      temp: '28°C',
+    });
+    setResetTrigger((p) => p + 1);
+  };
+
+  const handlePlayerMove = (lat: number, lng: number, heading = 0, isWalking = false) => {
+    multiplayerRef.current?.updateLocalTransform(lat, lng, heading, isWalking);
+  };
 
   const handleWidenChange = (level: WidenLevel) => {
     setWidenLevel(level);
@@ -146,6 +250,13 @@ function App() {
         ref={canvasRef}
         currentLocation={currentLocation}
         resetTrigger={resetTrigger}
+        onPlayerMove={handlePlayerMove}
+      />
+
+      {/* Welcome Onboarding Modal for Name & Kerala District (Auto GPS Spawn) */}
+      <WelcomeOnboardingModal
+        isOpen={isOnboardingOpen}
+        onComplete={handleOnboardingComplete}
       />
 
       {/* Global Search Modal */}
@@ -157,32 +268,52 @@ function App() {
 
       {/* Top Floating Snapchat Header */}
       <div className="absolute top-0 left-0 right-0 z-30 p-3 pointer-events-none flex flex-col gap-2.5">
-        {/* Row 1: Profile Avatar, Location Info / Search, Search Button */}
-        <div className="flex items-center justify-between w-full pointer-events-auto">
-          {/* Bitmoji Profile Avatar */}
-          <div
-            onClick={() => setIsSearchOpen(true)}
-            className="w-10 h-10 rounded-full bg-white shadow-md border-2 border-white flex items-center justify-center text-xl cursor-pointer hover:scale-105 transition-transform"
-            title="Search Places Worldwide"
-          >
-            😎
+        {/* Row 1: Profile Avatar & Live Players, Location Info, Voice Controls & Search */}
+        <div className="flex items-center justify-between w-full pointer-events-auto gap-2">
+          {/* Left: Profile Bitmoji & Live Players Count Pill */}
+          <div className="flex items-center gap-2">
+            <div
+              onClick={() => setIsOnboardingOpen(true)}
+              className="w-10 h-10 rounded-full bg-white shadow-md border-2 border-white flex items-center justify-center text-xl cursor-pointer hover:scale-105 transition-transform"
+              title={userProfile ? `${userProfile.name} (${userProfile.district}) — ക്ലിക്ക് ചെയ്ത് പ്രൊഫൈൽ മാറ്റാം` : 'Set Profile'}
+            >
+              {userProfile ? '😎' : '👤'}
+            </div>
+
+            {/* Live Players Counter & Roster Trigger */}
+            <LivePlayersOverlay
+              localPlayer={
+                userProfile
+                  ? {
+                      name: userProfile.name,
+                      district: userProfile.district,
+                      lat: currentLocation.lat,
+                      lng: currentLocation.lng,
+                    }
+                  : null
+              }
+              remotePlayers={remotePlayersList}
+              onFlyToPlayer={(lat, lng, _name) => {
+                canvasRef.current?.flyToLocation(lat, lng, 18.5);
+              }}
+            />
           </div>
 
-          {/* Location Center Pill / Global Search Trigger */}
+          {/* Center: Location Pill / Global Search Trigger */}
           <div className="relative">
             <button
-              className="glass-pill px-4 py-2 flex items-center gap-2 shadow-md cursor-pointer hover:bg-white/95 transition-all"
+              className="glass-pill px-3.5 py-2 flex items-center gap-2 shadow-md cursor-pointer hover:bg-white/95 transition-all"
               onClick={() => setIsSearchOpen(true)}
               title="Click to search any global location"
             >
               <div className="flex flex-col items-center leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-gray-900 text-sm tracking-tight">
+                  <span className="font-extrabold text-gray-900 text-xs sm:text-sm tracking-tight">
                     {currentLocation.name}
                   </span>
                   <ChevronDown size={14} className="text-gray-500" />
                 </div>
-                <div className="flex items-center gap-1 text-[11px] font-medium text-gray-500">
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-gray-500">
                   <Sun size={11} className="text-amber-500" />
                   <span>{currentLocation.temp || '28°C'}</span>
                   <span>•</span>
@@ -192,14 +323,36 @@ function App() {
             </button>
           </div>
 
-          {/* Quick Search Button */}
-          <button
-            onClick={() => setIsSearchOpen(true)}
-            className="w-10 h-10 rounded-full glass-pill flex items-center justify-center text-gray-700 shadow-md hover:bg-white transition-colors pointer-events-auto"
-            title="Search Any Global Place"
-          >
-            <Search size={18} />
-          </button>
+          {/* Right: Proximity Voice Controls & Quick Search Button */}
+          <div className="flex items-center gap-2">
+            <VoiceControls
+              isMuted={isMuted}
+              onToggleMute={() => {
+                if (multiplayerRef.current) {
+                  const nextMuted = multiplayerRef.current.toggleMute();
+                  setIsMuted(nextMuted);
+                }
+              }}
+              onEnableMic={async () => {
+                if (multiplayerRef.current) {
+                  const res = await multiplayerRef.current.enableMicrophone();
+                  if (res) {
+                    setIsMuted(false);
+                  }
+                  return res;
+                }
+                return false;
+              }}
+            />
+
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="w-10 h-10 rounded-full glass-pill flex items-center justify-center text-gray-700 shadow-md hover:bg-white transition-colors pointer-events-auto"
+              title="Search Any Global Place"
+            >
+              <Search size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Row 2: Snapchat Filter Pills */}

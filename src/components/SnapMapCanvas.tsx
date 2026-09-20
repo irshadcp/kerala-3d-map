@@ -42,13 +42,15 @@ export interface SnapMapCanvasRef {
   getCameraBearing: () => number;
   setWidenLevel: (level: WidenLevel) => void;
   getWidenLevel: () => WidenLevel;
+  getThreeLayer: () => ThreeMapLayer | null;
+  flyToLocation: (lat: number, lng: number, zoom?: number) => void;
   is3D: boolean;
   isRotateMode: boolean;
 }
 
 interface SnapMapCanvasProps {
   currentLocation: LocationPreset;
-  onPlayerMove?: (lat: number, lng: number) => void;
+  onPlayerMove?: (lat: number, lng: number, heading?: number, isWalking?: boolean) => void;
   resetTrigger: number;
 }
 
@@ -70,24 +72,25 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       toggle3D: () => {
         if (!map.current) return is3DRef.current;
         is3DRef.current = !is3DRef.current;
+        threeLayer.current?.set3DMode(is3DRef.current);
         const targetPitch = is3DRef.current
           ? WIDEN_CONFIG[widenLevelRef.current].pitch
           : 0;
         map.current.easeTo({
           pitch: targetPitch,
-          duration: 600,
+          duration: 500,
         });
         return is3DRef.current;
       },
       recenter: () => {
         if (!map.current) return;
+        is3DRef.current = true;
+        threeLayer.current?.set3DMode(true);
         const lat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
         const lng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
         const bearing = map.current.getBearing();
         const zoom = WIDEN_CONFIG[widenLevelRef.current].zoom;
-        const pitch = is3DRef.current
-          ? WIDEN_CONFIG[widenLevelRef.current].pitch
-          : 0;
+        const pitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
         const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current);
         map.current.flyTo({
           center: targetCenter,
@@ -118,6 +121,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       setWidenLevel: (level: WidenLevel) => {
         widenLevelRef.current = level;
         if (!map.current) return;
+        is3DRef.current = true;
+        threeLayer.current?.set3DMode(true);
         const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
         const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
         const bearing = map.current.getBearing();
@@ -126,12 +131,27 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         map.current.easeTo({
           center: targetCenter,
           zoom: cfg.zoom,
-          pitch: is3DRef.current ? cfg.pitch : 0,
+          pitch: cfg.pitch,
           duration: 600,
           easing: (t) => t * (2 - t),
         });
       },
       getWidenLevel: () => widenLevelRef.current,
+      getThreeLayer: () => threeLayer.current,
+      flyToLocation: (lat: number, lng: number, zoom = 18.2) => {
+        if (!map.current) return;
+        if (zoom >= 16.2) {
+          is3DRef.current = true;
+          threeLayer.current?.set3DMode(true);
+        }
+        const pitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
+        map.current.flyTo({
+          center: [lng, lat],
+          zoom,
+          pitch,
+          duration: 1600,
+        });
+      },
       moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
         if (!threeLayer.current) return;
         if (isMoving) {
@@ -188,11 +208,19 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             });
           }
           if (onPlayerMove) {
-            onPlayerMove(pLat, pLng);
+            const heading = threeLayer.current.character.getHeading();
+            onPlayerMove(pLat, pLng, heading, true);
           }
         } else {
           if (threeLayer.current) {
+            const wasWalking = threeLayer.current.isWalking;
             threeLayer.current.isWalking = false;
+            if (wasWalking && onPlayerMove) {
+              const pLat = threeLayer.current.playerLat;
+              const pLng = threeLayer.current.playerLng;
+              const heading = threeLayer.current.character.getHeading();
+              onPlayerMove(pLat, pLng, heading, false);
+            }
           }
         }
       },
@@ -220,6 +248,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         if (threeLayer.current && map.current && threeLayer.current.isWalking) {
           // Advance character position step BEFORE updating camera
           const moved = threeLayer.current.updateTapMovement(delta);
+          if (onPlayerMove) {
+            const heading = threeLayer.current.character.getHeading();
+            onPlayerMove(threeLayer.current.playerLat, threeLayer.current.playerLng, heading, moved);
+          }
 
           if (moved && !isManualInteractingRef.current) {
             const pLng = threeLayer.current.playerLng;
@@ -326,6 +358,34 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           mapInstance.addLayer(layer);
         });
 
+        // Dynamic Snapchat-style 2D/3D zoom transition engine
+        // When zoomed out (< 16.2), auto-ease pitch to 0 and switch to flat 2D mode for zero lag and zero heat!
+        const checkZoomAndMode = () => {
+          if (!map.current) return;
+          const currentZoom = map.current.getZoom();
+          const isCloseEnoughFor3D = currentZoom >= 16.2;
+
+          if (!isCloseEnoughFor3D && is3DRef.current) {
+            is3DRef.current = false;
+            threeLayer.current?.set3DMode(false);
+            map.current.easeTo({
+              pitch: 0,
+              duration: 350,
+            });
+          } else if (isCloseEnoughFor3D && !is3DRef.current) {
+            is3DRef.current = true;
+            threeLayer.current?.set3DMode(true);
+            const targetPitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
+            map.current.easeTo({
+              pitch: targetPitch,
+              duration: 350,
+            });
+          }
+        };
+
+        mapInstance.on('zoom', checkZoomAndMode);
+        mapInstance.on('zoomend', checkZoomAndMode);
+
         // Tap or click to walk/move avatar (when not in rotate mode)
         mapInstance.on('click', (e) => {
           if (!mapInstance || !threeLayer.current || isRotateModeRef.current) return;
@@ -337,7 +397,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           threeLayer.current.updatePlayerPosition(lat, lng);
 
           if (onPlayerMove) {
-            onPlayerMove(lat, lng);
+            const heading = threeLayer.current.character.getHeading();
+            onPlayerMove(lat, lng, heading, true);
           }
         });
 

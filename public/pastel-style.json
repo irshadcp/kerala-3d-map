@@ -168,11 +168,31 @@
       }
     },
     {
+      "id": "2d-buildings",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "building",
+      "minzoom": 13.0,
+      "maxzoom": 16.5,
+      "paint": {
+        "fill-color": "#f1f5f9",
+        "fill-outline-color": "#cbd5e1",
+        "fill-opacity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          13.0, 0.4,
+          15.0, 0.75,
+          16.2, 0.85
+        ]
+      }
+    },
+    {
       "id": "3d-buildings",
       "type": "fill-extrusion",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 14.2,
+      "minzoom": 16.2,
       "paint": {
         "fill-extrusion-color": [
           "interpolate",
@@ -188,18 +208,16 @@
           "interpolate",
           ["linear"],
           ["zoom"],
-          14.2, 0,
-          15.2, ["*", ["coalesce", ["get", "render_height"], 8], 0.7],
-          16, ["coalesce", ["get", "render_height"], 8]
+          16.2, 0,
+          16.6, ["coalesce", ["get", "render_height"], 8]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
         "fill-extrusion-opacity": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          14.2, 0,
-          14.8, 0.75,
-          16, 0.94,
+          16.2, 0,
+          16.5, 0.94,
           19, 0.92
         ],
         "fill-extrusion-vertical-gradient": true
