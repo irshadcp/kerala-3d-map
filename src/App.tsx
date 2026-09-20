@@ -650,8 +650,8 @@ function App() {
       {/* Floating Virtual Joystick for Mobile & Desktop */}
       <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto">
         <VirtualJoystick
-          onMove={(dirX, dirZ, isMoving) => {
-            canvasRef.current?.moveInDirection(dirX, dirZ, isMoving);
+          onMove={(dirX, dirZ, isMoving, dt, sUp) => {
+            canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
           }}
           getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
         />

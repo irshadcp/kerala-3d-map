@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 interface VirtualJoystickProps {
-  onMove: (dirX: number, dirZ: number, isMoving: boolean) => void;
+  onMove: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => void;
   getCameraBearing?: () => number;
 }
 
@@ -12,11 +12,16 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
   const pointerIdRef = useRef<number | null>(null);
   const currentVectorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const animFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(performance.now());
 
   const radius = 38; // Max thumbstick displacement in pixels
 
   // Continuous movement loop while active
   const tickMovement = useCallback(() => {
+    const now = performance.now();
+    const dt = Math.min(0.04, Math.max(0.008, (now - lastTimeRef.current) / 1000));
+    lastTimeRef.current = now;
+
     if (currentVectorRef.current.x !== 0 || currentVectorRef.current.y !== 0) {
       const vx = currentVectorRef.current.x;
       const vy = currentVectorRef.current.y;
@@ -37,13 +42,14 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       const worldX = sRight * cosB + sUp * sinB;
       const worldZ = sRight * sinB - sUp * cosB;
 
-      onMove(worldX, worldZ, true);
+      onMove(worldX, worldZ, true, dt, sUp);
     }
     animFrameRef.current = requestAnimationFrame(tickMovement);
   }, [onMove, getCameraBearing]);
 
   useEffect(() => {
     if (isActive) {
+      lastTimeRef.current = performance.now();
       animFrameRef.current = requestAnimationFrame(tickMovement);
     } else {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -59,6 +65,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
     if (!containerRef.current) return;
     pointerIdRef.current = e.pointerId;
     containerRef.current.setPointerCapture(e.pointerId);
+    lastTimeRef.current = performance.now();
     setIsActive(true);
     updatePosition(e.clientX, e.clientY);
   };

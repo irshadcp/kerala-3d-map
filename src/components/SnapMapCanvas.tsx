@@ -9,7 +9,7 @@ export interface SnapMapCanvasRef {
   rotateBy: (degrees: number) => void;
   resetRotation: () => void;
   toggleRotateMode: () => boolean;
-  moveInDirection: (dirX: number, dirZ: number, isMoving: boolean) => void;
+  moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => void;
   getCameraBearing: () => number;
   is3D: boolean;
   isRotateMode: boolean;
@@ -28,6 +28,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     const threeLayer = useRef<ThreeMapLayer | null>(null);
     const is3DRef = useRef<boolean>(true);
     const isRotateModeRef = useRef<boolean>(false);
+    const isManualInteractingRef = useRef<boolean>(false);
     const playerCoordsRef = useRef<{ lat: number; lng: number }>({
       lat: currentLocation.lat,
       lng: currentLocation.lng,
@@ -73,24 +74,36 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         isRotateModeRef.current = !isRotateModeRef.current;
         return isRotateModeRef.current;
       },
-      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean) => {
+      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
         if (!threeLayer.current) return;
         if (isMoving) {
-          const delta = 0.018; // smooth step
+          // Cancel tap-to-walk destination if user takes joystick control
+          threeLayer.current.isWalking = false;
+
+          const delta = dt && dt > 0 && dt < 0.1 ? dt : 0.016;
           threeLayer.current.moveInDirection(dirX, dirZ, delta);
           const pLat = threeLayer.current.playerLat;
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Ultra-smooth third-person chase camera locked to character's back
-          if (map.current && !(window as any).__isManualRotating) {
-            const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
+          // Ultra-smooth third-person chase camera locked to character
+          if (map.current && !isManualInteractingRef.current) {
             const currentBearing = map.current.getBearing();
-            let diff = targetBearing - currentBearing;
-            while (diff < -180) diff += 360;
-            while (diff > 180) diff -= 360;
+            let newBearing = currentBearing;
 
-            const newBearing = (currentBearing + diff * 0.035 + 360) % 360;
+            // Only rotate camera behind player if steering mostly forward (sUp > 0.1)
+            // If strafing sideways or moving backward, keep current bearing steady
+            if (sUp === undefined || sUp > 0.1) {
+              const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
+              let diff = targetBearing - currentBearing;
+              while (diff < -180) diff += 360;
+              while (diff > 180) diff -= 360;
+
+              if (Math.abs(diff) > 0.05) {
+                newBearing = (currentBearing + diff * 0.045 + 360) % 360;
+              }
+            }
+
             map.current.jumpTo({
               center: [pLng, pLat],
               bearing: newBearing,
@@ -98,6 +111,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           }
           if (onPlayerMove) {
             onPlayerMove(pLat, pLng);
+          }
+        } else {
+          if (threeLayer.current) {
+            threeLayer.current.isWalking = false;
           }
         }
       },
@@ -115,9 +132,18 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     // Smooth dedicated camera follow loop for tap-to-walk (independent of WebGL render)
     useEffect(() => {
       let animId: number;
+      let lastTime = performance.now();
+
       const chaseLoop = () => {
+        const now = performance.now();
+        const delta = Math.min(0.033, Math.max(0.008, (now - lastTime) / 1000));
+        lastTime = now;
+
         if (threeLayer.current && map.current && threeLayer.current.isWalking) {
-          if (!(window as any).__isManualRotating) {
+          // Advance character position step BEFORE updating camera
+          const moved = threeLayer.current.updateTapMovement(delta);
+
+          if (moved && !isManualInteractingRef.current) {
             const pLng = threeLayer.current.playerLng;
             const pLat = threeLayer.current.playerLat;
             const heading = threeLayer.current.character.getHeading();
@@ -127,7 +153,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             while (diff < -180) diff += 360;
             while (diff > 180) diff -= 360;
 
-            const newBearing = (currentBearing + diff * 0.035 + 360) % 360;
+            const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * 0.045 + 360) % 360 : currentBearing;
             map.current.jumpTo({
               center: [pLng, pLat],
               bearing: newBearing,
@@ -167,17 +193,29 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         (window as any).__map = mapInstance;
 
         // Manual rotation / drag listeners to prevent chase camera fighting user gesture
-        mapInstance.on('rotatestart', () => { (window as any).__isManualRotating = true; });
-        mapInstance.on('rotateend', () => {
-          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        // Check e.originalEvent so programmatic jumpTo calls never trigger manual interaction flags!
+        const setManualInteraction = (val: boolean) => {
+          isManualInteractingRef.current = val;
+          (window as any).__isManualRotating = val;
+        };
+
+        mapInstance.on('dragstart', (e: any) => {
+          if (e.originalEvent) setManualInteraction(true);
         });
-        mapInstance.on('dragstart', () => { (window as any).__isManualRotating = true; });
-        mapInstance.on('dragend', () => {
-          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        mapInstance.on('dragend', (e: any) => {
+          if (e.originalEvent) setManualInteraction(false);
         });
-        mapInstance.on('pitchstart', () => { (window as any).__isManualRotating = true; });
-        mapInstance.on('pitchend', () => {
-          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        mapInstance.on('rotatestart', (e: any) => {
+          if (e.originalEvent) setManualInteraction(true);
+        });
+        mapInstance.on('rotateend', (e: any) => {
+          if (e.originalEvent) setManualInteraction(false);
+        });
+        mapInstance.on('pitchstart', (e: any) => {
+          if (e.originalEvent) setManualInteraction(true);
+        });
+        mapInstance.on('pitchend', (e: any) => {
+          if (e.originalEvent) setManualInteraction(false);
         });
 
         mapInstance.on('style.load', () => {
@@ -213,7 +251,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const onPointerDown = (e: PointerEvent) => {
           if (!isRotateModeRef.current || !map.current) return;
           isRotating = true;
-          (window as any).__isManualRotating = true;
+          setManualInteraction(true);
           startX = e.clientX;
           startY = e.clientY;
           startBearing = map.current.getBearing();
@@ -238,7 +276,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const onPointerUp = (e: PointerEvent) => {
           if (!isRotating) return;
           isRotating = false;
-          (window as any).__isManualRotating = false;
+          setManualInteraction(false);
           try {
             container.releasePointerCapture(e.pointerId);
           } catch (_) {}
