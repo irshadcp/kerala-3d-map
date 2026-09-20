@@ -64,21 +64,21 @@ function App() {
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
   const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
 
-  // User profile state (ephemeral or remembered in localStorage for convenience)
-  const [userProfile, setUserProfile] = useState<LocalUserProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem('kerala_3d_user_profile');
-      return saved ? JSON.parse(saved) : null;
-    } catch (_) {
-      return null;
-    }
-  });
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(!userProfile);
+  // User profile state - 100% ephemeral in memory, never stored in localStorage
+  const [userProfile, setUserProfile] = useState<LocalUserProfile | null>(null);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(true);
   const [remotePlayersList, setRemotePlayersList] = useState<RemotePlayerData[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const multiplayerRef = useRef<MultiplayerManager | null>(null);
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
+
+  // Clear any past session profile from device storage
+  useEffect(() => {
+    try {
+      localStorage.removeItem('kerala_3d_user_profile');
+    } catch (_) {}
+  }, []);
 
   // Initialize or reconfigure MultiplayerManager when userProfile changes
   useEffect(() => {
@@ -99,10 +99,12 @@ function App() {
     mgr.onPlayerUpdate = (player) => {
       const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
       if (threeLayer?.remotePlayerManager) {
+        const originLat = threeLayer.originLat ?? currentLocation.lat;
+        const originLng = threeLayer.originLng ?? currentLocation.lng;
         threeLayer.remotePlayerManager.updatePlayer(
           player,
-          threeLayer.playerLat || currentLocation.lat,
-          threeLayer.playerLng || currentLocation.lng
+          originLat,
+          originLng
         );
       }
       setRemotePlayersList(Array.from(mgr.remotePlayers.values()));
@@ -140,7 +142,7 @@ function App() {
       district: res.district,
     };
     try {
-      localStorage.setItem('kerala_3d_user_profile', JSON.stringify(profile));
+      localStorage.removeItem('kerala_3d_user_profile');
     } catch (_) {}
     setUserProfile(profile);
     setIsOnboardingOpen(false);

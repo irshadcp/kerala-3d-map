@@ -112,7 +112,7 @@ export const WelcomeOnboardingModal: React.FC<WelcomeOnboardingModalProps> = ({
               required
               autoFocus
               maxLength={24}
-              placeholder="ഉദാ: Irshad / Rahul / Amina"
+              placeholder="നിങ്ങളുടെ പേര് നൽകുക..."
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl bg-white/80 border-2 border-gray-200 focus:border-emerald-500 focus:bg-white focus:outline-none text-base font-bold text-gray-900 placeholder-gray-400 transition-all shadow-inner"

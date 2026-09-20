@@ -13,6 +13,7 @@ export interface RemotePlayerData {
   isWalking: boolean;
   isMuted?: boolean;
   isSpeaking?: boolean;
+  t?: number;
 }
 
 export interface RemotePlayerInstance {
@@ -25,6 +26,7 @@ export interface RemotePlayerInstance {
   currentHeading: number;
   targetHeading: number;
   lastSeen: number;
+  lastTransformTime: number;
   gainNode?: GainNode;
   audioElement?: HTMLAudioElement;
 }
@@ -94,15 +96,29 @@ export class RemotePlayerManager {
         currentHeading: data.heading || 0,
         targetHeading: data.heading || 0,
         lastSeen: Date.now(),
+        lastTransformTime: data.t || Date.now(),
       };
 
       this.players.set(data.id, player);
     } else {
+      // Drop older out-of-order packets if timestamp is older
+      if (data.t && data.t < player.lastTransformTime) {
+        return;
+      }
+      if (data.t) {
+        player.lastTransformTime = data.t;
+      }
+
       // Update existing player
       player.data = { ...player.data, ...data };
       player.targetPos.set(localTarget.x, localTarget.z);
       player.targetHeading = data.heading;
       player.lastSeen = Date.now();
+
+      // If remote player jumped far (e.g. search / initial teleport), snap immediately without lagging
+      if (player.currentPos.distanceTo(player.targetPos) > 30) {
+        player.currentPos.copy(player.targetPos);
+      }
 
       player.nameplate.update({
         name: data.name,
@@ -122,9 +138,12 @@ export class RemotePlayerManager {
     const player = this.players.get(playerId);
 
     try {
+      // Dummy audio element to satisfy browser autoplay policies, but MUTED to prevent bypassing gainNode!
       const audio = new Audio();
       audio.srcObject = remoteStream;
+      audio.muted = true;
       audio.autoplay = true;
+      audio.play().catch(() => {});
 
       const source = audioCtx.createMediaStreamSource(remoteStream);
       const gainNode = audioCtx.createGain();

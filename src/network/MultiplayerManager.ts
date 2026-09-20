@@ -50,6 +50,7 @@ export class MultiplayerManager {
   public onMuteStateChange?: (muted: boolean) => void;
 
   private heartbeatTimer: number | null = null;
+  private lastTransformSent = 0;
 
   constructor(profile: LocalUserProfile, initialLat: number, initialLng: number) {
     this.profile = profile;
@@ -140,6 +141,10 @@ export class MultiplayerManager {
       const peerId = context.peerId;
       const player = this.remotePlayers.get(peerId);
       if (player) {
+        if (data.t && player.t && data.t < player.t) {
+          return;
+        }
+        player.t = data.t;
         player.lat = data.lat;
         player.lng = data.lng;
         player.heading = data.heading;
@@ -228,25 +233,33 @@ export class MultiplayerManager {
     heading: number,
     isWalking: boolean
   ) {
+    const now = Date.now();
+    const walkingChanged = isWalking !== this.localIsWalking;
+    const timeElapsed = now - this.lastTransformSent >= 75; // Rate limit to max 13 updates/sec
+
     this.localLat = lat;
     this.localLng = lng;
     this.localHeading = heading;
     this.localIsWalking = isWalking;
 
-    const data = { lat, lng, heading, isWalking };
+    // Send packet immediately if walking state changed, or after 75ms
+    if (walkingChanged || timeElapsed) {
+      this.lastTransformSent = now;
+      const data = { lat, lng, heading, isWalking, t: now };
 
-    try {
-      this.sendTransform(data);
-    } catch (_) {}
-
-    if (this.broadcastChannel) {
       try {
-        this.broadcastChannel.postMessage({
-          type: 'transform',
-          peerId: selfId,
-          data,
-        });
+        this.sendTransform(data);
       } catch (_) {}
+
+      if (this.broadcastChannel) {
+        try {
+          this.broadcastChannel.postMessage({
+            type: 'transform',
+            peerId: selfId,
+            data,
+          });
+        } catch (_) {}
+      }
     }
   }
 
@@ -265,6 +278,7 @@ export class MultiplayerManager {
         isWalking: msg.data.isWalking,
         isMuted: msg.data.isMuted,
         isSpeaking: msg.data.isSpeaking,
+        t: msg.data.t,
       };
       this.remotePlayers.set(msg.peerId, player);
       if (this.onPlayerUpdate) this.onPlayerUpdate(player);
@@ -272,10 +286,21 @@ export class MultiplayerManager {
     } else if (msg.type === 'transform') {
       const p = this.remotePlayers.get(msg.peerId);
       if (p) {
+        if (msg.data.t && p.t && msg.data.t < p.t) {
+          return;
+        }
+        p.t = msg.data.t;
         p.lat = msg.data.lat;
         p.lng = msg.data.lng;
         p.heading = msg.data.heading;
         p.isWalking = msg.data.isWalking;
+        if (this.onPlayerUpdate) this.onPlayerUpdate(p);
+      }
+    } else if (msg.type === 'state') {
+      const p = this.remotePlayers.get(msg.peerId);
+      if (p) {
+        if (msg.data.isMuted !== undefined) p.isMuted = msg.data.isMuted;
+        if (msg.data.isSpeaking !== undefined) p.isSpeaking = msg.data.isSpeaking;
         if (this.onPlayerUpdate) this.onPlayerUpdate(p);
       }
     } else if (msg.type === 'leave') {
@@ -353,6 +378,16 @@ export class MultiplayerManager {
     try {
       this.sendState({ isMuted: this.isMuted });
     } catch (_) {}
+
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'state',
+          peerId: selfId,
+          data: { isMuted: this.isMuted },
+        });
+      } catch (_) {}
+    }
 
     if (this.onMuteStateChange) {
       this.onMuteStateChange(this.isMuted);

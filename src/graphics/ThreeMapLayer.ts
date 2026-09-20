@@ -44,8 +44,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private _idleRepaintScheduled: boolean = false;
   private regenerateTimer: number | null = null;
 
-  private originLat: number;
-  private originLng: number;
+  public originLat: number;
+  public originLng: number;
   public playerLat: number;
   public playerLng: number;
 
