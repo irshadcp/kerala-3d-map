@@ -14,6 +14,7 @@ import { KeralaUrbanManager } from './KeralaUrbanManager';
 import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
+import { PlayerVehicle } from './PlayerVehicle';
 import { BuildingFacadeManager } from './BuildingFacadeManager';
 import { RemotePlayerManager } from './RemotePlayerManager';
 
@@ -38,6 +39,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
   private buildingFacadeManager!: BuildingFacadeManager;
+  public playerVehicle!: PlayerVehicle;
+  public isDrivingState: boolean = false;
   public remotePlayerManager!: RemotePlayerManager;
   public threeDGroup!: THREE.Group;
   public is3DActive: boolean = true;
@@ -113,6 +116,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.playerAvatarGroup = new THREE.Group();
     this.character = new RealisticCharacter(1.35);
     this.playerAvatarGroup.add(this.character.group);
+
+    // Parked / Driveable Kerala Vehicle (Auto-Rickshaw beside player)
+    this.playerVehicle = new PlayerVehicle('auto', 1.0);
+    this.playerAvatarGroup.add(this.playerVehicle.group);
+    this.playerVehicle.setPosition(2.4, 0, 0);
 
     this.scene.add(this.playerAvatarGroup);
 
@@ -276,13 +284,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (!this.character || !this.playerAvatarGroup) return;
 
     this.isWalking = true;
-    const moveSpeed = 10.5; // 10.5 m/s jog speed
+    const moveSpeed = this.isDrivingState ? 22.0 : 10.5; // Fast driving speed vs jog
     const stepDist = moveSpeed * delta;
     const nextX = this.currentPos.x + dirX * stepDist;
     const nextZ = this.currentPos.y + dirZ * stepDist;
 
+    const colRadius = this.isDrivingState ? 0.65 : 0.4;
     // Obstacle collision check with smooth surface-normal wall sliding
-    if (!this.isPositionBlocked(nextX, nextZ, 0.4)) {
+    if (!this.isPositionBlocked(nextX, nextZ, colRadius)) {
       this.currentPos.x = nextX;
       this.currentPos.y = nextZ;
     } else {
@@ -300,11 +309,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
             let tx = this.currentPos.x + sx * stepDist;
             let tz = this.currentPos.y + sz * stepDist;
             const sn = this.obstacleMap.getNearestBuildingSurface(tx, tz, 1.5);
-            if (sn && sn.dist < 0.45) {
-              tx += sn.nx * (0.45 - sn.dist);
-              tz += sn.nz * (0.45 - sn.dist);
+            if (sn && sn.dist < (colRadius + 0.05)) {
+              tx += sn.nx * (colRadius + 0.05 - sn.dist);
+              tz += sn.nz * (colRadius + 0.05 - sn.dist);
             }
-            if (!this.isPositionBlocked(tx, tz, 0.35)) {
+            if (!this.isPositionBlocked(tx, tz, colRadius - 0.05)) {
               this.currentPos.x = tx;
               this.currentPos.y = tz;
             }
@@ -312,9 +321,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         }
       } else {
         // Fallback: axis sliding
-        if (!this.isPositionBlocked(nextX, this.currentPos.y, 0.4)) {
+        if (!this.isPositionBlocked(nextX, this.currentPos.y, colRadius)) {
           this.currentPos.x = nextX;
-        } else if (!this.isPositionBlocked(this.currentPos.x, nextZ, 0.4)) {
+        } else if (!this.isPositionBlocked(this.currentPos.x, nextZ, colRadius)) {
           this.currentPos.y = nextZ;
         }
       }
@@ -325,7 +334,19 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     const heading = Math.atan2(dirX, dirZ);
     this.character.setHeading(heading);
-    this.character.update(delta, true, 1.3);
+    this.character.update(delta, true, this.isDrivingState ? 0.5 : 1.3);
+
+    if (this.playerVehicle) {
+      if (this.isDrivingState) {
+        this.playerVehicle.setPosition(0, 0, 0);
+        this.playerVehicle.setHeading(heading);
+        this.playerVehicle.update(delta, true, true, 2.6);
+      } else {
+        this.playerVehicle.setPosition(2.4, 0, 0);
+        this.playerVehicle.setHeading(0);
+        this.playerVehicle.update(delta, false, false, 0);
+      }
+    }
 
     const coords = this.getPlayerLngLat();
     this.playerLat = coords.lat;
@@ -335,8 +356,27 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.lastChunkCheckX = this.currentPos.x;
       this.lastChunkCheckZ = this.currentPos.y;
       this.updateChunks(this.currentPos.x, this.currentPos.y);
-      this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, this.currentPos.x, this.currentPos.y);
     }
+  }
+
+  public toggleDrive(): boolean {
+    this.isDrivingState = !this.isDrivingState;
+    if (this.isDrivingState) {
+      this.playerVehicle.setPosition(0, 0, 0);
+      this.playerVehicle.setHeading(this.character.getHeading());
+      this.character.group.position.set(0, 0.25, 0.1);
+      this.character.group.scale.set(1.15, 1.15, 1.15);
+    } else {
+      this.playerVehicle.setPosition(2.4, 0, 0);
+      this.playerVehicle.setHeading(0);
+      this.character.group.position.set(0, 0, 0);
+      this.character.group.scale.set(1.5, 1.5, 1.5);
+    }
+    return this.isDrivingState;
+  }
+
+  public isDriving(): boolean {
+    return this.isDrivingState;
   }
 
   public setOrigin(lat: number, lng: number) {
@@ -611,7 +651,19 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     // Procedural animation (limb swings / idle breathing)
     if (this.character) {
-      this.character.update(delta, this.isWalking, 1.25);
+      this.character.update(delta, this.isWalking, this.isDrivingState ? 0.5 : 1.25);
+    }
+
+    if (this.playerVehicle) {
+      if (this.isDrivingState) {
+        this.playerVehicle.setPosition(0, 0, 0);
+        this.playerVehicle.setHeading(this.character.getHeading());
+        this.playerVehicle.update(delta, true, this.isWalking, 2.5);
+      } else {
+        this.playerVehicle.setPosition(2.4, 0, 0);
+        this.playerVehicle.setHeading(0);
+        this.playerVehicle.update(delta, false, false, 0);
+      }
     }
 
     // Procedural water vessel wave floating animation

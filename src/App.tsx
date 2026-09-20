@@ -73,11 +73,31 @@ function App() {
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
 
+  const [isDriving, setIsDriving] = useState(false);
+
   // Clear any past session profile from device storage
   useEffect(() => {
     try {
       localStorage.removeItem('kerala_3d_user_profile');
     } catch (_) {}
+  }, []);
+
+  const handleToggleDrive = () => {
+    if (canvasRef.current) {
+      const state = canvasRef.current.toggleDrive();
+      setIsDriving(state);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['KeyF', 'KeyE'].includes(e.code)) {
+        if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+        handleToggleDrive();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Initialize or reconfigure MultiplayerManager when userProfile changes
@@ -163,8 +183,14 @@ function App() {
     setResetTrigger((p) => p + 1);
   };
 
-  const handlePlayerMove = (lat: number, lng: number, heading = 0, isWalking = false) => {
-    multiplayerRef.current?.updateLocalTransform(lat, lng, heading, isWalking);
+  const handlePlayerMove = (
+    lat: number,
+    lng: number,
+    heading = 0,
+    isWalking = false,
+    drivingState = isDriving
+  ) => {
+    multiplayerRef.current?.updateLocalTransform(lat, lng, heading, isWalking, drivingState);
   };
 
   const handleWidenChange = (level: WidenLevel) => {
@@ -847,14 +873,35 @@ function App() {
         />
       </div>
 
-      {/* Floating Virtual Joystick for Mobile & Desktop */}
-      <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto">
+      {/* Floating Virtual Joystick & Drive Vehicle Controls for Mobile & Desktop */}
+      <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto flex items-end gap-2.5">
         <VirtualJoystick
           onMove={(dirX, dirZ, isMoving, dt, sUp) => {
             canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
           }}
           getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
         />
+
+        {/* Drive / Exit Kerala Vehicle Button */}
+        <button
+          onClick={handleToggleDrive}
+          className={`flex items-center gap-2 px-3 py-2 rounded-2xl shadow-xl transition-all pointer-events-auto backdrop-blur-md active:scale-95 mb-1 ${
+            isDriving
+              ? 'bg-amber-500 hover:bg-amber-600 text-white border-2 border-amber-300 shadow-amber-500/30 ring-2 ring-amber-400/50'
+              : 'bg-white/95 hover:bg-white text-gray-800 border border-gray-200/90 hover:shadow-2xl'
+          }`}
+          title={isDriving ? "Exit Vehicle (Press E or F)" : "Drive Vehicle (Press E or F)"}
+        >
+          <span className="text-xl leading-none">{isDriving ? '🚶' : '🛺'}</span>
+          <div className="flex flex-col text-left">
+            <span className="leading-tight font-extrabold text-[12px]">
+              {isDriving ? 'Exit Auto' : 'Drive Auto'}
+            </span>
+            <span className="text-[10px] opacity-85 font-semibold leading-none">
+              {isDriving ? 'ഇറങ്ങുക' : 'ഓടിക്കുക'}
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* Bottom Snapchat Bar */}

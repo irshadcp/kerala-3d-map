@@ -30,6 +30,7 @@ export class MultiplayerManager {
   public localLng = 0;
   public localHeading = 0;
   public localIsWalking = false;
+  public localIsDriving = false;
 
   // Voice Chat state
   private audioContext: AudioContext | null = null;
@@ -119,6 +120,7 @@ export class MultiplayerManager {
         lng: typeof data.lng === 'number' ? data.lng : this.localLng,
         heading: data.heading || 0,
         isWalking: Boolean(data.isWalking),
+        isDriving: Boolean(data.isDriving),
         isMuted: Boolean(data.isMuted),
         isSpeaking: Boolean(data.isSpeaking),
       };
@@ -149,6 +151,7 @@ export class MultiplayerManager {
         player.lng = data.lng;
         player.heading = data.heading;
         player.isWalking = data.isWalking;
+        player.isDriving = Boolean(data.isDriving);
 
         if (this.onPlayerUpdate) {
           this.onPlayerUpdate(player);
@@ -208,6 +211,7 @@ export class MultiplayerManager {
       lng: this.localLng,
       heading: this.localHeading,
       isWalking: this.localIsWalking,
+      isDriving: this.localIsDriving,
       isMuted: this.isMuted,
       isSpeaking: this.isSpeaking,
     };
@@ -231,10 +235,15 @@ export class MultiplayerManager {
     lat: number,
     lng: number,
     heading: number,
-    isWalking: boolean
+    isWalking: boolean,
+    isDriving?: boolean
   ) {
     const now = Date.now();
     const walkingChanged = isWalking !== this.localIsWalking;
+    const drivingChanged = isDriving !== undefined && isDriving !== this.localIsDriving;
+    if (isDriving !== undefined) {
+      this.localIsDriving = isDriving;
+    }
     const timeElapsed = now - this.lastTransformSent >= 75; // Rate limit to max 13 updates/sec
 
     this.localLat = lat;
@@ -242,10 +251,17 @@ export class MultiplayerManager {
     this.localHeading = heading;
     this.localIsWalking = isWalking;
 
-    // Send packet immediately if walking state changed, or after 75ms
-    if (walkingChanged || timeElapsed) {
+    // Send packet immediately if walking/driving state changed, or after 75ms
+    if (walkingChanged || drivingChanged || timeElapsed) {
       this.lastTransformSent = now;
-      const data = { lat, lng, heading, isWalking, t: now };
+      const data = {
+        lat,
+        lng,
+        heading,
+        isWalking,
+        isDriving: this.localIsDriving,
+        t: now,
+      };
 
       try {
         this.sendTransform(data);
@@ -276,6 +292,7 @@ export class MultiplayerManager {
         lng: msg.data.lng,
         heading: msg.data.heading,
         isWalking: msg.data.isWalking,
+        isDriving: Boolean(msg.data.isDriving),
         isMuted: msg.data.isMuted,
         isSpeaking: msg.data.isSpeaking,
         t: msg.data.t,
@@ -294,6 +311,7 @@ export class MultiplayerManager {
         p.lng = msg.data.lng;
         p.heading = msg.data.heading;
         p.isWalking = msg.data.isWalking;
+        p.isDriving = Boolean(msg.data.isDriving);
         if (this.onPlayerUpdate) this.onPlayerUpdate(p);
       }
     } else if (msg.type === 'state') {

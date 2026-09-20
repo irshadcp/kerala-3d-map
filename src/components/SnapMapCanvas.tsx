@@ -57,13 +57,15 @@ export interface SnapMapCanvasRef {
   getThreeLayer: () => ThreeMapLayer | null;
   flyToLocation: (lat: number, lng: number, zoom?: number) => void;
   teleportToLocation: (lat: number, lng: number) => void;
+  toggleDrive: () => boolean;
   is3D: boolean;
   isRotateMode: boolean;
+  isDriving: boolean;
 }
 
 interface SnapMapCanvasProps {
   currentLocation: LocationPreset;
-  onPlayerMove?: (lat: number, lng: number, heading?: number, isWalking?: boolean) => void;
+  onPlayerMove?: (lat: number, lng: number, heading?: number, isWalking?: boolean, isDriving?: boolean) => void;
   resetTrigger: number;
   remotePlayers?: RemotePlayerData[];
   localPlayer?: LocalUserProfile | null;
@@ -203,7 +205,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           }
         });
       },
-      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
+      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, _sUp?: number) => {
         if (!threeLayer.current) return;
         if (isMoving) {
           // Cancel tap-to-walk destination if user takes joystick control
@@ -215,52 +217,21 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Ultra-smooth chase camera locked to character
+          // Rock-solid camera follow locked to character position
           if (map.current && !isManualInteractingRef.current) {
             const currentBearing = map.current.getBearing();
-            let newBearing = currentBearing;
+            const basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
+            const targetCenter = getTargetCenter(pLat, pLng, currentBearing, widenLevelRef.current);
 
-            // Only rotate behind player if steering mostly forward (sUp > 0.1)
-            // If strafing sideways or moving backward, keep current bearing steady
-            if (sUp === undefined || sUp > 0.1) {
-              const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
-              let diff = targetBearing - currentBearing;
-              while (diff < -180) diff += 360;
-              while (diff > 180) diff -= 360;
-
-              if (Math.abs(diff) > 0.05) {
-                newBearing = (currentBearing + diff * 0.045 + 360) % 360;
-              }
-            }
-
-            // Smart Occlusion Detection: Auto-elevate camera pitch if building blocks line of sight
-            let basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
-            let targetPitch = basePitch;
-
-            if (is3DRef.current && threeLayer.current) {
-              const camDist = widenLevelRef.current === '2x' ? 30 : (widenLevelRef.current === '5x' ? 55 : 85);
-              const isBlocked = threeLayer.current.isCameraOccluded(camDist, newBearing);
-              if (isBlocked) {
-                targetPitch = Math.max(46, basePitch - 24);
-              }
-            }
-
-            const currentMapPitch = map.current.getPitch();
-            let nextPitch = currentMapPitch;
-            if (Math.abs(currentMapPitch - targetPitch) > 0.4) {
-              nextPitch = currentMapPitch + (targetPitch - currentMapPitch) * 0.12;
-            }
-
-            const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current);
             map.current.jumpTo({
               center: targetCenter,
-              bearing: newBearing,
-              pitch: nextPitch,
+              bearing: currentBearing,
+              pitch: basePitch,
             });
           }
           if (onPlayerMove) {
             const heading = threeLayer.current.character.getHeading();
-            onPlayerMove(pLat, pLng, heading, true);
+            onPlayerMove(pLat, pLng, heading, true, threeLayer.current.isDriving());
           }
         } else {
           if (threeLayer.current) {
@@ -270,10 +241,25 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               const pLat = threeLayer.current.playerLat;
               const pLng = threeLayer.current.playerLng;
               const heading = threeLayer.current.character.getHeading();
-              onPlayerMove(pLat, pLng, heading, false);
+              onPlayerMove(pLat, pLng, heading, false, threeLayer.current.isDriving());
             }
           }
         }
+      },
+      toggleDrive: () => {
+        if (!threeLayer.current) return false;
+        const res = threeLayer.current.toggleDrive();
+        if (onPlayerMove) {
+          const heading = threeLayer.current.character.getHeading();
+          onPlayerMove(
+            threeLayer.current.playerLat,
+            threeLayer.current.playerLng,
+            heading,
+            threeLayer.current.isWalking,
+            res
+          );
+        }
+        return res;
       },
       getCameraBearing: () => {
         return map.current ? map.current.getBearing() : 0;
@@ -283,6 +269,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       },
       get isRotateMode() {
         return isRotateModeRef.current;
+      },
+      get isDriving() {
+        return threeLayer.current ? threeLayer.current.isDriving() : false;
       },
     }));
 
@@ -301,7 +290,13 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const moved = threeLayer.current.updateTapMovement(delta);
           if (onPlayerMove) {
             const heading = threeLayer.current.character.getHeading();
-            onPlayerMove(threeLayer.current.playerLat, threeLayer.current.playerLng, heading, moved);
+            onPlayerMove(
+              threeLayer.current.playerLat,
+              threeLayer.current.playerLng,
+              heading,
+              moved,
+              threeLayer.current.isDriving()
+            );
           }
 
           if (moved && !isManualInteractingRef.current) {
@@ -317,29 +312,12 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             const turnRate = 0.045;
             const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnRate + 360) % 360 : currentBearing;
 
-            // Smart Occlusion Detection: Auto-elevate camera pitch if building blocks line of sight
-            let basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
-            let targetPitch = basePitch;
-
-            if (is3DRef.current && threeLayer.current) {
-              const camDist = widenLevelRef.current === '2x' ? 30 : (widenLevelRef.current === '5x' ? 55 : 85);
-              const isBlocked = threeLayer.current.isCameraOccluded(camDist, newBearing);
-              if (isBlocked) {
-                targetPitch = Math.max(46, basePitch - 24);
-              }
-            }
-
-            const currentMapPitch = map.current.getPitch();
-            let nextPitch = currentMapPitch;
-            if (Math.abs(currentMapPitch - targetPitch) > 0.4) {
-              nextPitch = currentMapPitch + (targetPitch - currentMapPitch) * 0.12;
-            }
-
+            const basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
             const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current);
             map.current.jumpTo({
               center: targetCenter,
               bearing: newBearing,
-              pitch: nextPitch,
+              pitch: basePitch,
             });
           }
         }

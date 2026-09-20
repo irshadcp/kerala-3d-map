@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RealisticCharacter } from './RealisticCharacter';
+import { PlayerVehicle } from './PlayerVehicle';
 import { PlayerNameplate } from './PlayerNameplate';
 import { GeoCoords } from '../core/geoCoords';
 
@@ -11,6 +12,7 @@ export interface RemotePlayerData {
   lng: number;
   heading: number;
   isWalking: boolean;
+  isDriving?: boolean;
   isMuted?: boolean;
   isSpeaking?: boolean;
   t?: number;
@@ -19,6 +21,7 @@ export interface RemotePlayerData {
 export interface RemotePlayerInstance {
   data: RemotePlayerData;
   character: RealisticCharacter;
+  vehicle: PlayerVehicle;
   group: THREE.Group;
   nameplate: PlayerNameplate;
   currentPos: THREE.Vector2;
@@ -75,6 +78,9 @@ export class RemotePlayerManager {
       const character = new RealisticCharacter(1.35);
       group.add(character.group);
 
+      const vehicle = new PlayerVehicle('auto', 1.0);
+      group.add(vehicle.group);
+
       const nameplate = new PlayerNameplate({
         name: data.name,
         district: data.district,
@@ -89,6 +95,7 @@ export class RemotePlayerManager {
       player = {
         data,
         character,
+        vehicle,
         group,
         nameplate,
         currentPos: new THREE.Vector2(localTarget.x, localTarget.z),
@@ -167,6 +174,7 @@ export class RemotePlayerManager {
 
     this.scene.remove(player.group);
     player.nameplate.dispose();
+    player.vehicle.dispose();
 
     player.group.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -232,6 +240,21 @@ export class RemotePlayerManager {
 
       // Animate walking / idle breathing
       player.character.update(delta, player.data.isWalking, 1.25);
+
+      // Vehicle & Driving Posture
+      if (player.data.isDriving) {
+        player.character.group.position.set(0, 0.25, 0.1);
+        player.character.group.scale.set(1.15, 1.15, 1.15);
+        player.vehicle.setPosition(0, 0, 0);
+        player.vehicle.setHeading(player.currentHeading);
+        player.vehicle.update(delta, true, player.data.isWalking, 2.5);
+      } else {
+        player.character.group.position.set(0, 0, 0);
+        player.character.group.scale.set(1.5, 1.5, 1.5);
+        player.vehicle.setPosition(2.2, 0, 0);
+        player.vehicle.setHeading(0);
+        player.vehicle.update(delta, false, false, 0);
+      }
 
       // Proximity Voice Chat: calculate real-time 3D audio attenuation
       if (player.gainNode && this.audioContext) {
