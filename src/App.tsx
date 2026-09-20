@@ -30,7 +30,8 @@ import {
   Mountain,
   Waves,
   Building2,
-  Home
+  Home,
+  Sprout
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -347,7 +348,14 @@ function App() {
                   i.type === 'arecanut_grove' ||
                   i.type === 'banana_grove' ||
                   i.type === 'sacred_grove' ||
-                  i.type === 'laterite_cut'
+                  i.type === 'laterite_cut' ||
+                  i.type === 'residential_parcel' ||
+                  i.type === 'paddy_parcel' ||
+                  i.type === 'coconut_plantation' ||
+                  i.type === 'rubber_shed' ||
+                  i.type === 'lotus_pond' ||
+                  i.type === 'stream_bridge' ||
+                  i.type === 'wetland_mangrove'
               );
               if (items && items.length > 0) {
                 const map = (window as any).__map;
@@ -370,6 +378,43 @@ function App() {
           >
             <Home size={13} className="text-emerald-800" />
             <span>ഗ്രാമം</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__villageItems?.filter(
+                (i: any) =>
+                  i.type === 'paddy_parcel' ||
+                  i.type === 'coconut_plantation' ||
+                  i.type === 'rubber_shed' ||
+                  i.type === 'banana_grove' ||
+                  i.type === 'arecanut_grove' ||
+                  i.type === 'lotus_pond' ||
+                  i.type === 'stream_bridge' ||
+                  i.type === 'wetland_mangrove' ||
+                  i.type === 'residential_parcel'
+              );
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__agriIdx || 0) % items.length;
+                  (window as any).__agriIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.5,
+                    pitch: 54,
+                    bearing: 25,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-green-700 cursor-pointer"
+            title="Jump to Nearest Kerala Landscape / Farm Plot (നെൽവയൽ / തോട്ടം / ചതുപ്പ് / റബ്ബർ പുര)"
+          >
+            <Sprout size={13} className="text-green-700" />
+            <span>പാടം / തോട്ടം</span>
           </button>
 
           <button

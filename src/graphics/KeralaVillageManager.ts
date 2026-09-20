@@ -19,7 +19,14 @@ export interface PlacedVillageItemInfo {
     | 'arecanut_grove'
     | 'banana_grove'
     | 'sacred_grove'
-    | 'laterite_cut';
+    | 'laterite_cut'
+    | 'paddy_parcel'
+    | 'coconut_plantation'
+    | 'rubber_shed'
+    | 'lotus_pond'
+    | 'stream_bridge'
+    | 'wetland_mangrove'
+    | 'residential_parcel';
   name: string;
   lat: number;
   lng: number;
@@ -42,6 +49,13 @@ export class KeralaVillageManager {
   private bananaPositions: Array<{ x: number; z: number }> = [];
   private sacredPositions: Array<{ x: number; z: number }> = [];
   private lateritePositions: Array<{ x: number; z: number }> = [];
+  private paddyPositions: Array<{ x: number; z: number }> = [];
+  private coconutPositions: Array<{ x: number; z: number }> = [];
+  private rubberShedPositions: Array<{ x: number; z: number }> = [];
+  private lotusPondPositions: Array<{ x: number; z: number }> = [];
+  private streamBridgePositions: Array<{ x: number; z: number }> = [];
+  private wetlandPositions: Array<{ x: number; z: number }> = [];
+  private residentialPositions: Array<{ x: number; z: number }> = [];
 
   public placedItems: PlacedVillageItemInfo[] = [];
 
@@ -71,6 +85,13 @@ export class KeralaVillageManager {
     this.bananaPositions = [];
     this.sacredPositions = [];
     this.lateritePositions = [];
+    this.paddyPositions = [];
+    this.coconutPositions = [];
+    this.rubberShedPositions = [];
+    this.lotusPondPositions = [];
+    this.streamBridgePositions = [];
+    this.wetlandPositions = [];
+    this.residentialPositions = [];
     this.placedItems = [];
   }
 
@@ -783,6 +804,435 @@ export class KeralaVillageManager {
                   roadName: road.roadClass,
                 });
                 itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 12. Flat Residential Land Parcel (റെസിഡൻഷ്യൽ പ്ലോട്ട് / വീട്ടുപറമ്പ്)
+        // -------------------------------------------------------------
+        const resDist = road.buffer + 9.5;
+        const resX = midX + nx * resDist;
+        const resZ = midZ + nz * resDist;
+
+        if (profile.allowedAssets.includes('residential_parcel')) {
+          const minResDist = profile.spacing.residentialParcel || 160;
+          const tooCloseRes = this.residentialPositions.some(
+            (pos) => Math.hypot(pos.x - resX, pos.z - resZ) < minResDist
+          );
+
+          if (!tooCloseRes) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                resDist,
+                7.0,
+                5.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(resX, resZ, 7.0, 5.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(resX, resZ, 7.5, 6.0, rotY) &&
+              !obstacleMap.isPointInWater(resX, resZ)
+            ) {
+              const key = `res_${Math.round(resX / 6)}_${Math.round(resZ / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(resX - 7.0, resX + 7.0, resZ - 5.5, resZ + 5.5);
+
+                const model = KeralaVillageGenerator.createResidentialCompoundParcelModel();
+                model.position.set(resX, 0, resZ);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.residentialPositions.push({ x: resX, z: resZ });
+
+                const coords = GeoCoords.toLatLng(resX, resZ, originLat, originLng);
+                this.placedItems.push({
+                  type: 'residential_parcel',
+                  name: 'റെസിഡൻഷ്യൽ പ്ലോട്ട് / വീട്ടുപറമ്പ് (Flat Residential Land)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: resX,
+                  z: resZ,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 13. Paddy Field Parcel with Bunds & Scarecrow (നെൽപ്പാടവും വരമ്പും)
+        // -------------------------------------------------------------
+        const paddyDist = road.buffer + 14.5;
+        const pdx = midX + nx * paddyDist;
+        const pdz = midZ + nz * paddyDist;
+
+        if (profile.allowedAssets.includes('paddy_parcel')) {
+          const minPaddyDist = profile.spacing.paddyParcel || 240;
+          const tooClosePaddy = this.paddyPositions.some(
+            (pos) => Math.hypot(pos.x - pdx, pos.z - pdz) < minPaddyDist
+          );
+
+          if (!tooClosePaddy) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                paddyDist,
+                7.5,
+                5.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(pdx, pdz, 7.5, 5.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(pdx, pdz, 8.0, 6.0, rotY) &&
+              !obstacleMap.isPointInWater(pdx, pdz)
+            ) {
+              const key = `paddy_${Math.round(pdx / 7)}_${Math.round(pdz / 7)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(pdx - 7.5, pdx + 7.5, pdz - 5.5, pdz + 5.5);
+
+                const model = KeralaVillageGenerator.createPaddyFieldParcelModel();
+                model.position.set(pdx, 0, pdz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.paddyPositions.push({ x: pdx, z: pdz });
+
+                const coords = GeoCoords.toLatLng(pdx, pdz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'paddy_parcel',
+                  name: 'നെൽപ്പാടവും വരമ്പും (Paddy Field & Bunds)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: pdx,
+                  z: pdz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 14. Coconut Plantation Plot (തെങ്ങിൻ തോപ്പ്)
+        // -------------------------------------------------------------
+        const cocoDist = road.buffer + 12.0;
+        const ccx = midX + nx * cocoDist;
+        const ccz = midZ + nz * cocoDist;
+
+        if (profile.allowedAssets.includes('coconut_plantation')) {
+          const minCocoDist = profile.spacing.coconutPlantation || 220;
+          const tooCloseCoco = this.coconutPositions.some(
+            (pos) => Math.hypot(pos.x - ccx, pos.z - ccz) < minCocoDist
+          );
+
+          if (!tooCloseCoco) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                cocoDist,
+                6.5,
+                5.0,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(ccx, ccz, 6.5, 5.0, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(ccx, ccz, 7.0, 5.5, rotY) &&
+              !obstacleMap.isPointInWater(ccx, ccz)
+            ) {
+              const key = `coco_${Math.round(ccx / 6)}_${Math.round(ccz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(ccx - 6.5, ccx + 6.5, ccz - 5.0, ccz + 5.0);
+
+                const model = KeralaVillageGenerator.createCoconutPlantationPlotModel();
+                model.position.set(ccx, 0, ccz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.coconutPositions.push({ x: ccx, z: ccz });
+
+                const coords = GeoCoords.toLatLng(ccx, ccz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'coconut_plantation',
+                  name: 'തെങ്ങിൻ തോപ്പ് (Coconut Plantation Plot)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: ccx,
+                  z: ccz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 15. Rubber Processing Shed & Sheet Drying (റബ്ബർ പുകപ്പുര)
+        // -------------------------------------------------------------
+        const rubberDist = road.buffer + 8.5;
+        const rbx = midX + nx * rubberDist;
+        const rbz = midZ + nz * rubberDist;
+
+        if (profile.allowedAssets.includes('rubber_shed')) {
+          const minRubberDist = profile.spacing.rubberShed || 250;
+          const tooCloseRubber = this.rubberShedPositions.some(
+            (pos) => Math.hypot(pos.x - rbx, pos.z - rbz) < minRubberDist
+          );
+
+          if (!tooCloseRubber) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                rubberDist,
+                4.5,
+                3.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(rbx, rbz, 4.5, 3.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(rbx, rbz, 5.0, 4.0, rotY) &&
+              !obstacleMap.isPointInWater(rbx, rbz)
+            ) {
+              const key = `rshed_${Math.round(rbx / 6)}_${Math.round(rbz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(rbx - 4.5, rbx + 4.5, rbz - 3.5, rbz + 3.5);
+
+                const model = KeralaVillageGenerator.createRubberProcessingShedModel();
+                model.position.set(rbx, 0, rbz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.rubberShedPositions.push({ x: rbx, z: rbz });
+
+                const coords = GeoCoords.toLatLng(rbx, rbz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'rubber_shed',
+                  name: 'റബ്ബർ പുകപ്പുര & റോളർ മെഷീൻ (Rubber Processing Shed)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: rbx,
+                  z: rbz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 16. Natural Country Lotus Pond (നാടൻ ആമ്പൽക്കുളം)
+        // -------------------------------------------------------------
+        const lotusDist = road.buffer + 13.5;
+        const ltx = midX + nx * lotusDist;
+        const ltz = midZ + nz * lotusDist;
+
+        if (profile.allowedAssets.includes('lotus_pond')) {
+          const minLotusDist = profile.spacing.lotusPond || 300;
+          const tooCloseLotus = this.lotusPondPositions.some(
+            (pos) => Math.hypot(pos.x - ltx, pos.z - ltz) < minLotusDist
+          );
+
+          if (!tooCloseLotus) {
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                lotusDist,
+                5.5,
+                5.0,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(ltx, ltz, 5.5, 5.0, 0, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(ltx, ltz, 6.0, 5.5, 0) &&
+              !obstacleMap.isPointInWater(ltx, ltz)
+            ) {
+              const key = `lotus_${Math.round(ltx / 6)}_${Math.round(ltz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(ltx - 5.5, ltx + 5.5, ltz - 5.0, ltz + 5.0);
+
+                const model = KeralaVillageGenerator.createNaturalLotusPondModel();
+                model.position.set(ltx, 0, ltz);
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.lotusPondPositions.push({ x: ltx, z: ltz });
+
+                const coords = GeoCoords.toLatLng(ltx, ltz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'lotus_pond',
+                  name: 'നാടൻ ആമ്പൽക്കുളം (Natural Lotus Pond)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: ltx,
+                  z: ltz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 17. Country Stream with Coconut Trunk Footbridge (തോടും തെങ്ങുപാലവും)
+        // -------------------------------------------------------------
+        const streamDist = road.buffer + 8.5;
+        const stx = midX + nx * streamDist;
+        const stz = midZ + nz * streamDist;
+
+        if (profile.allowedAssets.includes('stream_bridge')) {
+          const distToWater = obstacleMap.getDistanceToWater(stx, stz, 30);
+          if (distToWater <= 20) {
+            const minStreamDist = profile.spacing.streamBridge || 200;
+            const tooCloseStream = this.streamBridgePositions.some(
+              (pos) => Math.hypot(pos.x - stx, pos.z - stz) < minStreamDist
+            );
+
+            if (!tooCloseStream) {
+              const rotY = Math.atan2(tx, tz);
+              if (
+                obstacleMap.isStationFootprintClear(
+                  midX,
+                  midZ,
+                  nx,
+                  nz,
+                  tx,
+                  tz,
+                  streamDist,
+                  4.5,
+                  6.0,
+                  road.p1,
+                  road.p2
+                ) &&
+                !obstacleMap.isRoadCollision(stx, stz, 4.5, 6.0, rotY, road.p1, road.p2) &&
+                !obstacleMap.isBuildingCollision(stx, stz, 5.0, 6.5, rotY)
+              ) {
+                const key = `sbridge_${Math.round(stx / 6)}_${Math.round(stz / 6)}`;
+                if (!this.items.has(key)) {
+                  obstacleMap.registerCustomObstacle(stx - 4.5, stx + 4.5, stz - 6.0, stz + 6.0);
+
+                  const model = KeralaVillageGenerator.createStreamFootbridgeModel();
+                  model.position.set(stx, 0, stz);
+                  model.rotation.y = rotY;
+
+                  this.scene.add(model);
+                  this.items.set(key, model);
+                  this.streamBridgePositions.push({ x: stx, z: stz });
+
+                  const coords = GeoCoords.toLatLng(stx, stz, originLat, originLng);
+                  this.placedItems.push({
+                    type: 'stream_bridge',
+                    name: 'തോടും തെങ്ങുപാലവും (Stream with Footbridge)',
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    x: stx,
+                    z: stz,
+                    roadName: road.roadClass,
+                  });
+                  itemsPlaced++;
+                }
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 18. Wetland Mangrove & Reed Thicket (ചതുപ്പും കണ്ടൽക്കാടുകളും)
+        // -------------------------------------------------------------
+        const wetlandDist = road.buffer + 14.0;
+        const wmx = midX + nx * wetlandDist;
+        const wmz = midZ + nz * wetlandDist;
+
+        if (profile.allowedAssets.includes('wetland_mangrove')) {
+          const distToWater = obstacleMap.getDistanceToWater(wmx, wmz, 35);
+          if (distToWater <= 25) {
+            const minWetlandDist = profile.spacing.wetlandMangrove || 240;
+            const tooCloseWetland = this.wetlandPositions.some(
+              (pos) => Math.hypot(pos.x - wmx, pos.z - wmz) < minWetlandDist
+            );
+
+            if (!tooCloseWetland) {
+              const rotY = Math.atan2(-nx, -nz);
+              if (
+                obstacleMap.isStationFootprintClear(
+                  midX,
+                  midZ,
+                  nx,
+                  nz,
+                  tx,
+                  tz,
+                  wetlandDist,
+                  6.5,
+                  5.5,
+                  road.p1,
+                  road.p2
+                ) &&
+                !obstacleMap.isRoadCollision(wmx, wmz, 6.5, 5.5, rotY, road.p1, road.p2) &&
+                !obstacleMap.isBuildingCollision(wmx, wmz, 7.0, 6.0, rotY)
+              ) {
+                const key = `wmangrove_${Math.round(wmx / 6)}_${Math.round(wmz / 6)}`;
+                if (!this.items.has(key)) {
+                  obstacleMap.registerCustomObstacle(wmx - 6.5, wmx + 6.5, wmz - 5.5, wmz + 5.5);
+
+                  const model = KeralaVillageGenerator.createWetlandMangroveModel();
+                  model.position.set(wmx, 0, wmz);
+                  model.rotation.y = rotY;
+
+                  this.scene.add(model);
+                  this.items.set(key, model);
+                  this.wetlandPositions.push({ x: wmx, z: wmz });
+
+                  const coords = GeoCoords.toLatLng(wmx, wmz, originLat, originLng);
+                  this.placedItems.push({
+                    type: 'wetland_mangrove',
+                    name: 'ചതുപ്പും കണ്ടൽക്കാടുകളും (Wetland Mangroves & Reeds)',
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    x: wmx,
+                    z: wmz,
+                    roadName: road.roadClass,
+                  });
+                  itemsPlaced++;
+                }
               }
             }
           }

@@ -36,7 +36,14 @@ export type KeralaAssetType =
   | 'banana_grove'
   | 'sacred_grove'
   | 'laterite_cut'
-  | 'rocky_outcrop';
+  | 'rocky_outcrop'
+  | 'paddy_parcel'
+  | 'coconut_plantation'
+  | 'rubber_shed'
+  | 'lotus_pond'
+  | 'stream_bridge'
+  | 'wetland_mangrove'
+  | 'residential_parcel';
 
 export interface ZoneProfile {
   type: KeralaZoneType;
@@ -83,6 +90,13 @@ export interface ZoneProfile {
     sacredGrove?: number;
     lateriteCut?: number;
     rockyOutcrop?: number;
+    paddyParcel?: number;
+    coconutPlantation?: number;
+    rubberShed?: number;
+    lotusPond?: number;
+    streamBridge?: number;
+    wetlandMangrove?: number;
+    residentialParcel?: number;
   };
 }
 
@@ -155,6 +169,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'banana_grove',
       'sacred_grove',
       'laterite_cut',
+      'residential_parcel',
+      'lotus_pond',
+      'stream_bridge',
+      'coconut_plantation',
     ],
     treeProfile: {
       baseDensity: 10,
@@ -181,6 +199,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       bananaGrove: 220,
       sacredGrove: 600,
       lateriteCut: 380,
+      residentialParcel: 160,
+      lotusPond: 360,
+      streamBridge: 220,
+      coconutPlantation: 260,
     },
   },
 
@@ -204,6 +226,12 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'banana_grove',
       'sacred_grove',
       'laterite_cut',
+      'residential_parcel',
+      'paddy_parcel',
+      'coconut_plantation',
+      'rubber_shed',
+      'lotus_pond',
+      'stream_bridge',
     ],
     treeProfile: {
       baseDensity: 14,
@@ -225,6 +253,12 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       bananaGrove: 180,
       sacredGrove: 500,
       lateriteCut: 320,
+      residentialParcel: 180,
+      paddyParcel: 240,
+      coconutPlantation: 220,
+      rubberShed: 280,
+      lotusPond: 300,
+      streamBridge: 200,
     },
   },
 
@@ -277,6 +311,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'chayakada',
       'open_well',
       'worship_place',
+      'wetland_mangrove',
+      'lotus_pond',
+      'stream_bridge',
+      'coconut_plantation',
     ],
     treeProfile: {
       baseDensity: 16,
@@ -291,6 +329,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       boatJetty: 350,
       chayakada: 300,
       worshipPlace: 700,
+      wetlandMangrove: 240,
+      lotusPond: 280,
+      streamBridge: 200,
+      coconutPlantation: 220,
     },
   },
 
@@ -307,6 +349,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'canal_culvert',
       'arecanut_grove',
       'banana_grove',
+      'paddy_parcel',
+      'lotus_pond',
+      'stream_bridge',
+      'coconut_plantation',
     ],
     treeProfile: {
       baseDensity: 3, // Very low in the field; only on dikes/bunds
@@ -324,6 +370,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       canalCulvert: 200,
       arecanutGrove: 280,
       bananaGrove: 240,
+      paddyParcel: 240,
+      lotusPond: 320,
+      streamBridge: 180,
+      coconutPlantation: 260,
     },
   },
 
@@ -332,7 +382,7 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
     nameEnglish: 'Wetland (Marshes & Mangroves)',
     nameMalayalam: 'ചതുപ്പുനിലം (Wetland)',
     description: 'Waterlogged soils, mangrove roots, wild reeds',
-    allowedAssets: ['fishing_boat'], // Minimal human interference
+    allowedAssets: ['fishing_boat', 'wetland_mangrove', 'stream_bridge'],
     treeProfile: {
       baseDensity: 12,
       primarySpecies: 'tropical_rainforest',
@@ -342,6 +392,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       petrolStation: 3000,
       busStop: 800,
       playground: 3000,
+      wetlandMangrove: 220,
+      streamBridge: 200,
     },
   },
 
@@ -362,6 +414,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'arecanut_grove',
       'banana_grove',
       'laterite_cut',
+      'rubber_shed',
+      'coconut_plantation',
     ],
     treeProfile: {
       baseDensity: 18,
@@ -380,6 +434,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       arecanutGrove: 220,
       bananaGrove: 200,
       lateriteCut: 300,
+      rubberShed: 250,
+      coconutPlantation: 240,
     },
   },
 

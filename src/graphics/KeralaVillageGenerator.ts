@@ -872,4 +872,541 @@ export class KeralaVillageGenerator {
     grove.scale.set(1.4, 1.4, 1.4);
     return grove;
   }
+
+  /**
+   * 13. Kerala Paddy Field Parcel with Mud Bunds & Scarecrow (നെൽപ്പാടവും വരമ്പും നോക്കുകുത്തിയും)
+   * Flooded fertile green rice field with raised earthen bunds (വരമ്പ്),
+   * irrigation channel, lush rows of rice crops, and traditional scarecrow.
+   */
+  public static createPaddyFieldParcelModel(): THREE.Group {
+    const plot = new THREE.Group();
+    plot.name = 'kerala_paddy_parcel';
+
+    const mudMat = new THREE.MeshLambertMaterial({ color: 0x5c3d2e }); // Muddy bund earth
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x047857,
+      roughness: 0.2,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.9,
+    }); // Flooded paddy green
+    const riceShootMat1 = new THREE.MeshLambertMaterial({ color: 0x84cc16 }); // Tender green rice shoots
+    const riceShootMat2 = new THREE.MeshLambertMaterial({ color: 0x65a30d });
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x451a03 });
+    const clothMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 }); // Red cloth on scarecrow
+    const potMat = new THREE.MeshLambertMaterial({ color: 0x1c1917 }); // Clay pot head
+
+    // 1. Flooded Paddy Water Surface (14m x 10m)
+    const bedGeo = new THREE.BoxGeometry(14.0, 0.08, 10.0);
+    const bed = new THREE.Mesh(bedGeo, waterMat);
+    bed.position.y = 0.04;
+    plot.add(bed);
+
+    // 2. Outer & Dividing Mud Dikes / Bunds (വരമ്പുകൾ)
+    // Left & Right outer bunds
+    for (const sx of [-7.0, 7.0]) {
+      const bGeo = new THREE.BoxGeometry(0.5, 0.22, 10.0);
+      const bMesh = new THREE.Mesh(bGeo, mudMat);
+      bMesh.position.set(sx, 0.11, 0);
+      plot.add(bMesh);
+    }
+    // Front & Back outer bunds
+    for (const sz of [-5.0, 5.0]) {
+      const bGeo = new THREE.BoxGeometry(14.0, 0.22, 0.5);
+      const bMesh = new THREE.Mesh(bGeo, mudMat);
+      bMesh.position.set(0, 0.11, sz);
+      plot.add(bMesh);
+    }
+    // Central dividing bund (നടുവരമ്പ്)
+    const midBundGeo = new THREE.BoxGeometry(0.4, 0.2, 10.0);
+    const midBund = new THREE.Mesh(midBundGeo, mudMat);
+    midBund.position.set(0, 0.1, 0);
+    plot.add(midBund);
+
+    // 3. Rows of vibrant green young rice seedlings (കതിരണിയുന്ന നെൽച്ചെടികൾ)
+    for (let rx = -5.5; rx <= 5.5; rx += 2.0) {
+      if (Math.abs(rx) < 0.6) continue; // Leave central bund clear
+      for (let rz = -3.8; rz <= 3.8; rz += 1.4) {
+        const shootGeo = new THREE.ConeGeometry(0.45, 0.8, 5);
+        const shootMat = (Math.round(rx + rz) % 2 === 0) ? riceShootMat1 : riceShootMat2;
+        const shoot = new THREE.Mesh(shootGeo, shootMat);
+        shoot.position.set(rx, 0.45, rz);
+        shoot.scale.set(1.1, 1, 0.8);
+        plot.add(shoot);
+      }
+    }
+
+    // 4. Traditional Kerala Scarecrow (നോക്കുകുത്തി) on dividing bund
+    const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 5);
+    const post = new THREE.Mesh(postGeo, woodMat);
+    post.position.set(0, 0.9, 1.2);
+    plot.add(post);
+
+    const crossArmGeo = new THREE.BoxGeometry(0.9, 0.04, 0.04);
+    const crossArm = new THREE.Mesh(crossArmGeo, woodMat);
+    crossArm.position.set(0, 1.4, 1.2);
+    plot.add(crossArm);
+
+    const shirtGeo = new THREE.ConeGeometry(0.35, 0.7, 4);
+    const shirt = new THREE.Mesh(shirtGeo, clothMat);
+    shirt.position.set(0, 1.15, 1.2);
+    plot.add(shirt);
+
+    const potHeadGeo = new THREE.SphereGeometry(0.16, 6, 6);
+    const potHead = new THREE.Mesh(potHeadGeo, potMat);
+    potHead.position.set(0, 1.6, 1.2);
+    plot.add(potHead);
+
+    plot.scale.set(1.4, 1.4, 1.4);
+    return plot;
+  }
+
+  /**
+   * 14. Kerala Coconut Plantation Plot (തെങ്ങിൻ തോപ്പ്)
+   * Grove of 4 tall leaning coconut palms, dried coconut husks (തൊണ്ട്),
+   * fallen brown coconuts, and rustic bamboo perimeter fencing.
+   */
+  public static createCoconutPlantationPlotModel(): THREE.Group {
+    const grove = new THREE.Group();
+    grove.name = 'kerala_coconut_plantation';
+
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+    const frondMat = new THREE.MeshLambertMaterial({ color: 0x16a34a, side: THREE.DoubleSide });
+    const nutMat = new THREE.MeshLambertMaterial({ color: 0x451a03 });
+    const huskMat = new THREE.MeshLambertMaterial({ color: 0xa16207 });
+    const soilMat = new THREE.MeshLambertMaterial({ color: 0x543519 });
+    const fenceMat = new THREE.MeshLambertMaterial({ color: 0xca8a04 }); // Bamboo fence
+
+    // Sandy-soil ground plot (12m x 9m)
+    const soilGeo = new THREE.BoxGeometry(12.0, 0.1, 9.0);
+    const soil = new THREE.Mesh(soilGeo, soilMat);
+    soil.position.y = 0.05;
+    grove.add(soil);
+
+    // 4 Leaning Coconut Palms
+    const palmConfigs = [
+      { x: -3.5, z: -2.2, h: 7.5, lean: 0.12, rotY: 0.4 },
+      { x: 3.2, z: -2.0, h: 8.0, lean: -0.14, rotY: -0.6 },
+      { x: -2.8, z: 2.2, h: 7.2, lean: 0.1, rotY: 1.2 },
+      { x: 3.0, z: 2.0, h: 7.8, lean: -0.11, rotY: -1.0 },
+    ];
+
+    for (const pc of palmConfigs) {
+      const palmGroup = new THREE.Group();
+      palmGroup.position.set(pc.x, 0, pc.z);
+
+      const lowerTrunkGeo = new THREE.CylinderGeometry(0.28, 0.38, pc.h * 0.55, 7);
+      const lowerTrunk = new THREE.Mesh(lowerTrunkGeo, trunkMat);
+      lowerTrunk.position.y = (pc.h * 0.55) / 2;
+      lowerTrunk.rotation.z = pc.lean;
+      palmGroup.add(lowerTrunk);
+
+      const upperTrunkGeo = new THREE.CylinderGeometry(0.2, 0.28, pc.h * 0.5, 7);
+      const upperTrunk = new THREE.Mesh(upperTrunkGeo, trunkMat);
+      upperTrunk.position.set(pc.lean * 2.0, pc.h * 0.75, 0);
+      upperTrunk.rotation.z = pc.lean * 1.5;
+      palmGroup.add(upperTrunk);
+
+      // Crown
+      const crown = new THREE.Group();
+      crown.position.set(pc.lean * 3.5, pc.h, 0);
+
+      // Radiating fronds
+      for (let f = 0; f < 7; f++) {
+        const fa = (f / 7) * Math.PI * 2;
+        const frondGeo = new THREE.BoxGeometry(0.38, 0.04, 3.2);
+        const frond = new THREE.Mesh(frondGeo, frondMat);
+        frond.rotation.y = fa;
+        frond.rotation.x = 0.48;
+        frond.position.set(Math.sin(fa) * 1.2, -0.3, Math.cos(fa) * 1.2);
+        crown.add(frond);
+      }
+
+      // Coconuts
+      for (let n = 0; n < 4; n++) {
+        const na = n * 1.5;
+        const nutGeo = new THREE.SphereGeometry(0.22, 6, 6);
+        const nut = new THREE.Mesh(nutGeo, nutMat);
+        nut.position.set(Math.sin(na) * 0.3, -0.25, Math.cos(na) * 0.3);
+        crown.add(nut);
+      }
+
+      palmGroup.add(crown);
+      grove.add(palmGroup);
+    }
+
+    // Heaps of dry coconut husks (തൊണ്ട്) on the ground
+    for (const hpos of [{ x: 0, z: -1.0 }, { x: -0.5, z: 1.2 }]) {
+      const huskGeo = new THREE.SphereGeometry(0.5, 6, 6);
+      huskGeo.scale(1.4, 0.6, 1.2);
+      const husk = new THREE.Mesh(huskGeo, huskMat);
+      husk.position.set(hpos.x, 0.25, hpos.z);
+      grove.add(husk);
+    }
+
+    // Rustic bamboo perimeter fence posts
+    for (let fx = -5.5; fx <= 5.5; fx += 2.5) {
+      for (const fz of [-4.2, 4.2]) {
+        const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.1, 5);
+        const post = new THREE.Mesh(postGeo, fenceMat);
+        post.position.set(fx, 0.55, fz);
+        grove.add(post);
+      }
+    }
+
+    grove.scale.set(1.4, 1.4, 1.4);
+    return grove;
+  }
+
+  /**
+   * 15. Kerala Rubber Processing Shed & Drying Rack (റബ്ബർ പുകപ്പുര & റോളർ മെഷീൻ)
+   * Open timber shed with manual rubber rolling machine, latex collection pans,
+   * and drying rack with hanging amber rubber sheets (റബ്ബർ ഷീറ്റുകൾ).
+   */
+  public static createRubberProcessingShedModel(): THREE.Group {
+    const shed = new THREE.Group();
+    shed.name = 'kerala_rubber_shed';
+
+    const timberMat = new THREE.MeshLambertMaterial({ color: 0x5c3d2e });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x64748b }); // Corrugated tin roof
+    const metalMat = new THREE.MeshLambertMaterial({ color: 0x1e293b }); // Cast iron roller
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7 });
+    const sheetMat = new THREE.MeshLambertMaterial({ color: 0xfde047 }); // Amber rubber sheet
+    const panMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc }); // White latex pans
+
+    // 1. Open Shed Posts (4 timber posts)
+    for (const px of [-1.6, 1.6]) {
+      for (const pz of [-1.2, 1.2]) {
+        const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.6, 6);
+        const post = new THREE.Mesh(postGeo, timberMat);
+        post.position.set(px, 1.3, pz);
+        shed.add(post);
+      }
+    }
+
+    // Sloped Corrugated Metal Roof
+    const roofGeo = new THREE.ConeGeometry(2.5, 0.8, 4);
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.set(0, 2.9, 0);
+    roof.rotation.y = Math.PI / 4;
+    roof.scale.set(1.3, 1, 1.1);
+    shed.add(roof);
+
+    // 2. Manual Rubber Roller Machine (റബ്ബർ റോളർ മെഷീൻ)
+    const machineBaseGeo = new THREE.BoxGeometry(0.8, 0.8, 0.5);
+    const machineBase = new THREE.Mesh(machineBaseGeo, timberMat);
+    machineBase.position.set(-0.8, 0.4, 0);
+    shed.add(machineBase);
+
+    // Twin horizontal rolling cylinders
+    for (const ry of [0.85, 1.05]) {
+      const rollerGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8);
+      const roller = new THREE.Mesh(rollerGeo, steelMat);
+      roller.rotation.z = Math.PI / 2;
+      roller.position.set(-0.8, ry, 0);
+      shed.add(roller);
+    }
+
+    // Manual turn handle wheel
+    const handleGeo = new THREE.TorusGeometry(0.18, 0.03, 6, 12);
+    const handle = new THREE.Mesh(handleGeo, metalMat);
+    handle.position.set(-0.45, 0.95, 0);
+    handle.rotation.y = Math.PI / 2;
+    shed.add(handle);
+
+    // 3. Wooden Drying Rack with Hanging Rubber Sheets (റബ്ബർ ഷീറ്റ് ഉണക്കൽ)
+    const rackBarGeo = new THREE.CylinderGeometry(0.03, 0.03, 3.2, 5);
+    const rackBar = new THREE.Mesh(rackBarGeo, timberMat);
+    rackBar.rotation.z = Math.PI / 2;
+    rackBar.position.set(0.6, 1.9, 0);
+    shed.add(rackBar);
+
+    // 4 hanging yellow/amber ribbed rubber sheets
+    for (let s = 0; s < 4; s++) {
+      const sx = -0.6 + s * 0.7;
+      const sheetGeo = new THREE.BoxGeometry(0.45, 0.65, 0.03);
+      const sheet = new THREE.Mesh(sheetGeo, sheetMat);
+      sheet.position.set(sx, 1.5, 0);
+      shed.add(sheet);
+    }
+
+    // Stack of shallow white latex collection dishes on the floor
+    for (let p = 0; p < 3; p++) {
+      const panGeo = new THREE.BoxGeometry(0.5, 0.06, 0.35);
+      const pan = new THREE.Mesh(panGeo, panMat);
+      pan.position.set(0.6, 0.03 + p * 0.07, 0.6);
+      shed.add(pan);
+    }
+
+    shed.scale.set(1.4, 1.4, 1.4);
+    return shed;
+  }
+
+  /**
+   * 16. Natural Country Lotus / Water-Lily Pond (നാടൻ ആമ്പൽക്കുളം)
+   * Oval natural pond with laterite stone rim, clear blue water,
+   * floating green water-lily pads (ആമ്പലിലകൾ), and blooming pink lilies (ആമ്പൽ പൂക്കൾ).
+   */
+  public static createNaturalLotusPondModel(): THREE.Group {
+    const pond = new THREE.Group();
+    pond.name = 'kerala_lotus_pond';
+
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7,
+      roughness: 0.1,
+      metalness: 0.15,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x15803d, side: THREE.DoubleSide });
+    const flowerMat = new THREE.MeshLambertMaterial({ color: 0xf472b6 }); // Pink lotus/amabal
+
+    // Oval natural water basin (diameter 8m x 6m)
+    const waterGeo = new THREE.CylinderGeometry(4.0, 4.2, 0.12, 16);
+    waterGeo.scale(1.2, 1, 0.9);
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.y = 0.06;
+    pond.add(water);
+
+    // Natural laterite stones surrounding perimeter
+    const stoneCount = 14;
+    for (let s = 0; s < stoneCount; s++) {
+      const sa = (s / stoneCount) * Math.PI * 2;
+      const sx = Math.sin(sa) * 4.4 * 1.2;
+      const sz = Math.cos(sa) * 4.4 * 0.9;
+      const stoneGeo = new THREE.DodecahedronGeometry(0.45, 0);
+      stoneGeo.scale(1.2, 0.7, 1.1);
+      const stone = new THREE.Mesh(stoneGeo, stoneMat);
+      stone.position.set(sx, 0.25, sz);
+      stone.rotation.set(0.2, sa, 0.1);
+      pond.add(stone);
+    }
+
+    // Floating water-lily pads (ആമ്പലിലകൾ)
+    const padPositions = [
+      { x: -1.5, z: -1.0 },
+      { x: 1.8, z: -0.8 },
+      { x: -0.8, z: 1.4 },
+      { x: 1.2, z: 1.1 },
+      { x: 0, z: 0 },
+      { x: -2.2, z: 0.4 },
+    ];
+
+    for (const pp of padPositions) {
+      const padGeo = new THREE.CircleGeometry(0.45, 8);
+      const pad = new THREE.Mesh(padGeo, leafMat);
+      pad.rotation.x = -Math.PI / 2;
+      pad.position.set(pp.x, 0.13, pp.z);
+      pond.add(pad);
+
+      // Pink blooming lotus flower on selected pads
+      if (Math.abs(pp.x) > 0.5) {
+        const flowerGeo = new THREE.ConeGeometry(0.18, 0.25, 6);
+        const flower = new THREE.Mesh(flowerGeo, flowerMat);
+        flower.position.set(pp.x, 0.25, pp.z);
+        pond.add(flower);
+      }
+    }
+
+    pond.scale.set(1.4, 1.4, 1.4);
+    return pond;
+  }
+
+  /**
+   * 17. Country Stream with Coconut Log Footbridge (തോടും തെങ്ങുപാലവും / ഇടവഴിപ്പാലം)
+   * Flowing blue stream with green banks crossed by a traditional single coconut trunk log
+   * footbridge (തെങ്ങുപാലം) with bamboo handrail.
+   */
+  public static createStreamFootbridgeModel(): THREE.Group {
+    const bridge = new THREE.Group();
+    bridge.name = 'kerala_stream_footbridge';
+
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x0ea5e9,
+      roughness: 0.1,
+      metalness: 0.15,
+      transparent: true,
+      opacity: 0.92,
+    });
+    const bankMat = new THREE.MeshLambertMaterial({ color: 0x15803d }); // Grassy stream banks
+    const palmLogMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Coconut trunk log
+    const bambooMat = new THREE.MeshLambertMaterial({ color: 0xca8a04 }); // Bamboo handrail
+
+    // Stream Channel (width 3.6m x length 10m)
+    const streamGeo = new THREE.BoxGeometry(3.6, 0.1, 10.0);
+    const stream = new THREE.Mesh(streamGeo, waterMat);
+    stream.position.y = 0.05;
+    bridge.add(stream);
+
+    // Left & Right Green Stream Banks
+    for (const sx of [-2.4, 2.4]) {
+      const bankGeo = new THREE.BoxGeometry(1.6, 0.25, 10.0);
+      const bank = new THREE.Mesh(bankGeo, bankMat);
+      bank.position.set(sx, 0.12, 0);
+      bridge.add(bank);
+    }
+
+    // Coconut Trunk Log Footbridge (തെങ്ങുപാലം) spanning across stream
+    const logGeo = new THREE.CylinderGeometry(0.2, 0.24, 4.8, 8);
+    const log = new THREE.Mesh(logGeo, palmLogMat);
+    log.rotation.z = Math.PI / 2;
+    log.position.set(0, 0.35, 0);
+    bridge.add(log);
+
+    // Bamboo Handrail (മുളക്കൈവരി)
+    for (const px of [-1.8, 0, 1.8]) {
+      const postGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5);
+      const post = new THREE.Mesh(postGeo, bambooMat);
+      post.position.set(px, 0.85, 0.45);
+      bridge.add(post);
+    }
+
+    const railGeo = new THREE.CylinderGeometry(0.03, 0.03, 4.8, 5);
+    const rail = new THREE.Mesh(railGeo, bambooMat);
+    rail.rotation.z = Math.PI / 2;
+    rail.position.set(0, 1.35, 0.45);
+    bridge.add(rail);
+
+    bridge.scale.set(1.4, 1.4, 1.4);
+    return bridge;
+  }
+
+  /**
+   * 18. Kerala Wetland Mangrove & Reed Thicket (ചതുപ്പും കണ്ടൽക്കാടുകളും)
+   * Waterlogged marshy bed with arching mangrove stilt roots (കണ്ടൽ വേരുകൾ),
+   * wild reed grass clumps, and a small wooden country canoe (തോണി).
+   */
+  public static createWetlandMangroveModel(): THREE.Group {
+    const wetland = new THREE.Group();
+    wetland.name = 'kerala_wetland_mangrove';
+
+    const marshMat = new THREE.MeshStandardMaterial({
+      color: 0x0f766e,
+      roughness: 0.3,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const rootMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Dark stilt roots
+    const foliageMat = new THREE.MeshLambertMaterial({ color: 0x14532d }); // Mangrove leaves
+    const reedMat = new THREE.MeshLambertMaterial({ color: 0x84cc16 });
+    const boatMat = new THREE.MeshLambertMaterial({ color: 0x5c3d2e });
+
+    // Waterlogged Marsh Basin (11m x 9m)
+    const basinGeo = new THREE.BoxGeometry(11.0, 0.08, 9.0);
+    const basin = new THREE.Mesh(basinGeo, marshMat);
+    basin.position.y = 0.04;
+    wetland.add(basin);
+
+    // Mangrove Tree with Arching Stilt Roots (കണ്ടൽ വേരുകൾ)
+    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 3.2, 7);
+    const trunk = new THREE.Mesh(trunkGeo, rootMat);
+    trunk.position.set(-1.5, 2.0, 0);
+    wetland.add(trunk);
+
+    // Arching stilt roots anchoring into marsh water
+    for (let r = 0; r < 6; r++) {
+      const ra = (r / 6) * Math.PI * 2;
+      const rootCurve = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 5);
+      const root = new THREE.Mesh(rootCurve, rootMat);
+      root.position.set(-1.5 + Math.sin(ra) * 0.7, 0.7, Math.cos(ra) * 0.7);
+      root.rotation.x = Math.sin(ra) * 0.4;
+      root.rotation.z = Math.cos(ra) * 0.4;
+      wetland.add(root);
+    }
+
+    // Dense dome canopy
+    const canopyGeo = new THREE.SphereGeometry(2.4, 8, 8);
+    canopyGeo.scale(1.3, 0.75, 1.3);
+    const canopy = new THREE.Mesh(canopyGeo, foliageMat);
+    canopy.position.set(-1.5, 3.8, 0);
+    wetland.add(canopy);
+
+    // Wild wetland reeds & marsh grass clumps (കൈതക്കാട് / ഞാങ്ങണ)
+    for (let g = 0; g < 7; g++) {
+      const gx = 1.0 + (g % 3) * 1.5;
+      const gz = -2.5 + Math.floor(g / 3) * 2.2;
+      const reedGeo = new THREE.ConeGeometry(0.35, 1.4, 5);
+      const reed = new THREE.Mesh(reedGeo, reedMat);
+      reed.position.set(gx, 0.7, gz);
+      wetland.add(reed);
+    }
+
+    // Small Wooden Country Canoe (ചെറിയ തോണി) moored in marsh
+    const canoeGeo = new THREE.BoxGeometry(0.7, 0.25, 2.4);
+    const canoe = new THREE.Mesh(canoeGeo, boatMat);
+    canoe.position.set(2.4, 0.12, 1.2);
+    canoe.rotation.y = 0.35;
+    wetland.add(canoe);
+
+    wetland.scale.set(1.4, 1.4, 1.4);
+    return wetland;
+  }
+
+  /**
+   * 19. Flat Residential Land Compound & Homestead (റെസിഡൻഷ്യൽ പ്ലോട്ട് / വീട്ടുപറമ്പ്)
+   * Flat levelled green lawn, whitewashed boundary compound wall with gate pillars,
+   * paved walking pathway, and tropical garden flower shrubs (ചെമ്പരത്തി / തെച്ചി).
+   */
+  public static createResidentialCompoundParcelModel(): THREE.Group {
+    const parcel = new THREE.Group();
+    parcel.name = 'kerala_residential_compound';
+
+    const lawnMat = new THREE.MeshLambertMaterial({ color: 0x86efac }); // Levelled residential green
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 }); // Whitewashed compound wall
+    const copingMat = new THREE.MeshLambertMaterial({ color: 0xb91c1c }); // Terracotta tile coping
+    const pathMat = new THREE.MeshLambertMaterial({ color: 0xd6d3d1 }); // Paved path
+    const shrubMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 }); // Red hibiscus flower
+
+    // Levelled residential lawn (13m x 10m)
+    const lawnGeo = new THREE.BoxGeometry(13.0, 0.08, 10.0);
+    const lawn = new THREE.Mesh(lawnGeo, lawnMat);
+    lawn.position.y = 0.04;
+    parcel.add(lawn);
+
+    // Paved entrance walking path
+    const pathGeo = new THREE.BoxGeometry(1.4, 0.09, 6.0);
+    const path = new THREE.Mesh(pathGeo, pathMat);
+    path.position.set(0, 0.05, 2.0);
+    parcel.add(path);
+
+    // Low whitewashed compound boundary walls (left & right)
+    for (const sx of [-6.4, 6.4]) {
+      const wallGeo = new THREE.BoxGeometry(0.22, 0.85, 9.8);
+      const wall = new THREE.Mesh(wallGeo, wallMat);
+      wall.position.set(sx, 0.45, 0);
+      parcel.add(wall);
+
+      // Red coping tile on top
+      const copGeo = new THREE.BoxGeometry(0.28, 0.06, 9.8);
+      const cop = new THREE.Mesh(copGeo, copingMat);
+      cop.position.set(sx, 0.9, 0);
+      parcel.add(cop);
+    }
+
+    // Front wall with entrance gate gap
+    for (const fx of [-3.8, 3.8]) {
+      const wallFGeo = new THREE.BoxGeometry(4.0, 0.85, 0.22);
+      const wallF = new THREE.Mesh(wallFGeo, wallMat);
+      wallF.position.set(fx, 0.45, 4.8);
+      parcel.add(wallF);
+
+      const gatePillarGeo = new THREE.BoxGeometry(0.45, 1.15, 0.45);
+      const gatePillar = new THREE.Mesh(gatePillarGeo, wallMat);
+      gatePillar.position.set(fx > 0 ? 1.6 : -1.6, 0.58, 4.8);
+      parcel.add(gatePillar);
+    }
+
+    // Tropical garden flower shrubs (ചെമ്പരത്തി / തെച്ചിപ്പൂക്കൾ)
+    for (const sp of [{ x: -3.0, z: 1.0 }, { x: 3.0, z: 1.0 }, { x: -3.0, z: -2.0 }, { x: 3.0, z: -2.0 }]) {
+      const bushGeo = new THREE.SphereGeometry(0.6, 6, 6);
+      const bush = new THREE.Mesh(bushGeo, shrubMat);
+      bush.position.set(sp.x, 0.4, sp.z);
+      parcel.add(bush);
+    }
+
+    parcel.scale.set(1.4, 1.4, 1.4);
+    return parcel;
+  }
 }
