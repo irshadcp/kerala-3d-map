@@ -24,7 +24,7 @@ interface RoadObstacle {
   buffer: number; // required clearance distance in meters
 }
 
-interface WaterObstacle {
+export interface WaterObstacle {
   minX: number;
   maxX: number;
   minZ: number;
@@ -53,6 +53,7 @@ export class SpatialObstacleMap {
   private commercialBuckets = new Set<string>();
   
   public roads: ExtractedRoad[] = [];
+  public waterObstacles: WaterObstacle[] = [];
   public totalBuildings = 0;
   public totalRoads = 0;
   public isReady = false;
@@ -122,6 +123,7 @@ export class SpatialObstacleMap {
     this.landcoverBuckets.clear();
     this.commercialBuckets.clear();
     this.roads = [];
+    this.waterObstacles = [];
     this.totalBuildings = buildingFeatures.length;
     this.totalRoads = roadFeatures.length;
     this.lastLat = originLat;
@@ -430,6 +432,7 @@ export class SpatialObstacleMap {
     }
 
     const water: WaterObstacle = { minX, maxX, minZ, maxZ, rings };
+    this.waterObstacles.push(water);
 
     const startCellX = Math.floor(minX / BUCKET_SIZE);
     const endCellX = Math.floor(maxX / BUCKET_SIZE);

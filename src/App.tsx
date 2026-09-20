@@ -23,7 +23,11 @@ import {
   Globe,
   Fuel,
   Bus,
-  Trophy
+  Trophy,
+  Coffee,
+  Ship,
+  Landmark,
+  Mountain
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -300,6 +304,110 @@ function App() {
           >
             <Trophy size={13} className="text-green-600" />
             <span>Playground</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__villageItems?.filter((i: any) => i.type === 'chayakada');
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__chayaIdx || 0) % items.length;
+                  (window as any).__chayaIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.5,
+                    pitch: 55,
+                    bearing: 35,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-amber-700 cursor-pointer"
+            title="Jump to Nearest Kerala Tea Shop (ചായക്കട)"
+          >
+            <Coffee size={13} className="text-amber-700" />
+            <span>ചായക്കട</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__maritimeItems?.filter((i: any) => i.type === 'houseboat' || i.type === 'fishing_boat' || i.type === 'boat_jetty');
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__maritimeIdx || 0) % items.length;
+                  (window as any).__maritimeIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.2,
+                    pitch: 52,
+                    bearing: 20,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-blue-600 cursor-pointer"
+            title="Jump to Nearest Kerala Houseboat / Boat Jetty"
+          >
+            <Ship size={13} className="text-blue-600" />
+            <span>കെട്ടുവള്ളം</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__villageItems?.filter((i: any) => i.type === 'temple' || i.type === 'church' || i.type === 'mosque');
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__worshipIdx || 0) % items.length;
+                  (window as any).__worshipIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.2,
+                    pitch: 54,
+                    bearing: 15,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-purple-600 cursor-pointer"
+            title="Jump to Nearest Temple / Church / Mosque"
+          >
+            <Landmark size={13} className="text-purple-600" />
+            <span>ക്ഷേത്രം / പള്ളി</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__highlandItems;
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__highlandIdx || 0) % items.length;
+                  (window as any).__highlandIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.0,
+                    pitch: 56,
+                    bearing: 45,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-700 cursor-pointer"
+            title="Jump to Nearest Highland Viewpoint / Checkpost"
+          >
+            <Mountain size={13} className="text-emerald-700" />
+            <span>മലയോരം</span>
           </button>
         </div>
       </div>

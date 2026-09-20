@@ -7,6 +7,10 @@ import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { PetrolStationManager } from './PetrolStationManager';
 import { BusStopManager } from './BusStopManager';
 import { PlaygroundManager } from './PlaygroundManager';
+import { KeralaVillageManager } from './KeralaVillageManager';
+import { KeralaMaritimeManager } from './KeralaMaritimeManager';
+import { KeralaHighlandManager } from './KeralaHighlandManager';
+import { KeralaUrbanManager } from './KeralaUrbanManager';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -22,6 +26,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private petrolStationManager!: PetrolStationManager;
   private busStopManager!: BusStopManager;
   private playgroundManager!: PlaygroundManager;
+  private villageManager!: KeralaVillageManager;
+  private maritimeManager!: KeralaMaritimeManager;
+  private highlandManager!: KeralaHighlandManager;
+  private urbanManager!: KeralaUrbanManager;
 
   private originLat: number;
   private originLng: number;
@@ -152,6 +160,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.petrolStationManager = new PetrolStationManager(this.scene);
     this.busStopManager = new BusStopManager(this.scene);
     this.playgroundManager = new PlaygroundManager(this.scene);
+    this.villageManager = new KeralaVillageManager(this.scene);
+    this.maritimeManager = new KeralaMaritimeManager(this.scene);
+    this.highlandManager = new KeralaHighlandManager(this.scene);
+    this.urbanManager = new KeralaUrbanManager(this.scene);
 
     this.updateModelTransform(this.originLat, this.originLng);
     
@@ -168,7 +180,30 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         // 3. Place neighborhood sports playgrounds in free spaces away from highway junctions
         this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng);
 
-        // 4. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, AND playgrounds!
+        // 4. Place Kerala Village & Cultural elements (Chayakada, Wells, Temples, Churches, Mosques)
+        this.villageManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 5. Place Kerala Maritime & Backwater elements (Houseboats, Fishing Boats, Jetties, Fish Markets)
+        this.maritimeManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 6. Place Kerala Highland & Western Ghats elements (Tea plantations, Checkposts, Viewpoints)
+        this.highlandManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 7. Place Kerala Urban elements (Traffic signals, Highway Billboards)
+        this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // Expose placed landmarks globally for UI navigation and inspection
+        if (typeof window !== 'undefined') {
+          (window as any).__petrolStations = this.petrolStationManager.placedStations;
+          (window as any).__busStops = this.busStopManager.placedStops;
+          (window as any).__playgrounds = this.playgroundManager.placedPlaygrounds;
+          (window as any).__villageItems = this.villageManager.placedItems;
+          (window as any).__maritimeItems = this.maritimeManager.placedItems;
+          (window as any).__highlandItems = this.highlandManager.placedItems;
+          (window as any).__urbanItems = this.urbanManager.placedItems;
+        }
+
+        // 8. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, playgrounds, and all landmarks!
         for (const group of this.loadedChunks.values()) {
           this.scene.remove(group);
           group.traverse((child) => {
@@ -220,6 +255,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.petrolStationManager?.clear();
     this.busStopManager?.clear();
     this.playgroundManager?.clear();
+    this.villageManager?.clear();
+    this.maritimeManager?.clear();
+    this.highlandManager?.clear();
+    this.urbanManager?.clear();
 
     for (const group of this.loadedChunks.values()) {
       this.scene.remove(group);
