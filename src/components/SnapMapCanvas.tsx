@@ -38,7 +38,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         if (!map.current) return is3DRef.current;
         is3DRef.current = !is3DRef.current;
         map.current.easeTo({
-          pitch: is3DRef.current ? 48 : 0,
+          pitch: is3DRef.current ? 75 : 0,
           duration: 600,
         });
         return is3DRef.current;
@@ -49,8 +49,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const lng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
         map.current.flyTo({
           center: [lng, lat],
-          zoom: 17,
-          pitch: is3DRef.current ? 48 : 0,
+          zoom: 17.8,
+          pitch: is3DRef.current ? 75 : 0,
           duration: 1000,
         });
       },
@@ -82,9 +82,19 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const pLng = threeLayer.current.playerLng;
           playerCoordsRef.current = { lat: pLat, lng: pLng };
 
-          // Buttery-smooth camera tracking locked to character movement
-          if (map.current) {
-            map.current.jumpTo({ center: [pLng, pLat] });
+          // Buttery-smooth third-person chase camera tracking locked to character's back
+          if (map.current && !(window as any).__isManualRotating) {
+            const targetBearing = ((Math.atan2(dirX, -dirZ) * 180 / Math.PI) + 360) % 360;
+            const currentBearing = map.current.getBearing();
+            let diff = targetBearing - currentBearing;
+            while (diff < -180) diff += 360;
+            while (diff > 180) diff -= 360;
+
+            const newBearing = (currentBearing + diff * 0.1) % 360;
+            map.current.jumpTo({
+              center: [pLng, pLat],
+              bearing: newBearing,
+            });
           }
           if (onPlayerMove) {
             onPlayerMove(pLat, pLng);
@@ -112,10 +122,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           container: mapContainer.current,
           style: '/pastel-style.json',
           center: [currentLocation.lng, currentLocation.lat],
-          zoom: 17,
-          pitch: 48,
+          zoom: 17.8,
+          pitch: 75,
           bearing: 0,
-          maxPitch: 65,
+          maxPitch: 85,
           minPitch: 0,
           maxZoom: 19.5,
           minZoom: 10,
@@ -127,6 +137,20 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
         map.current = mapInstance;
         (window as any).__map = mapInstance;
+
+        // Manual rotation / drag listeners to prevent chase camera fighting user gesture
+        mapInstance.on('rotatestart', () => { (window as any).__isManualRotating = true; });
+        mapInstance.on('rotateend', () => {
+          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        });
+        mapInstance.on('dragstart', () => { (window as any).__isManualRotating = true; });
+        mapInstance.on('dragend', () => {
+          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        });
+        mapInstance.on('pitchstart', () => { (window as any).__isManualRotating = true; });
+        mapInstance.on('pitchend', () => {
+          setTimeout(() => { (window as any).__isManualRotating = false; }, 350);
+        });
 
         mapInstance.on('style.load', () => {
           const layer = new ThreeMapLayer(currentLocation.lat, currentLocation.lng);
@@ -141,13 +165,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const { lng, lat } = e.lngLat;
           playerCoordsRef.current = { lat, lng };
 
+          // Tell character to walk towards tapped location
           threeLayer.current.updatePlayerPosition(lat, lng);
-
-          mapInstance.easeTo({
-            center: [lng, lat],
-            duration: 800,
-            easing: (t) => t * (2 - t),
-          });
 
           if (onPlayerMove) {
             onPlayerMove(lat, lng);
@@ -159,13 +178,14 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         let startX = 0;
         let startY = 0;
         let startBearing = 0;
-        let startPitch = 48;
+        let startPitch = 75;
 
         const container = mapContainer.current;
 
         const onPointerDown = (e: PointerEvent) => {
           if (!isRotateModeRef.current || !map.current) return;
           isRotating = true;
+          (window as any).__isManualRotating = true;
           startX = e.clientX;
           startY = e.clientY;
           startBearing = map.current.getBearing();
@@ -179,7 +199,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
           const newBearing = (startBearing + dx * 0.45) % 360;
-          const newPitch = Math.max(0, Math.min(65, startPitch - dy * 0.35));
+          const newPitch = Math.max(0, Math.min(85, startPitch - dy * 0.35));
           map.current.jumpTo({
             bearing: newBearing,
             pitch: newPitch,
@@ -190,6 +210,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const onPointerUp = (e: PointerEvent) => {
           if (!isRotating) return;
           isRotating = false;
+          (window as any).__isManualRotating = false;
           try {
             container.releasePointerCapture(e.pointerId);
           } catch (_) {}
@@ -217,8 +238,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
         map.current.flyTo({
           center: [currentLocation.lng, currentLocation.lat],
-          zoom: 17,
-          pitch: is3DRef.current ? 48 : 0,
+          zoom: 17.8,
+          pitch: is3DRef.current ? 75 : 0,
           duration: 1600,
         });
 

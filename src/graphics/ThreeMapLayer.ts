@@ -522,6 +522,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           }
 
           if (moved) {
+            const prevX = this.currentPos.x;
+            const prevZ = this.currentPos.y;
             this.currentPos.x = chosenX;
             this.currentPos.y = chosenZ;
 
@@ -533,6 +535,29 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
             const coords = GeoCoords.toLatLng(this.currentPos.x, this.currentPos.y, this.originLat, this.originLng);
             this.playerLat = coords.lat;
             this.playerLng = coords.lng;
+
+            // Third-person chase camera smoothly rotates behind character's back
+            if (this.map && !(window as any).__isManualRotating) {
+              const moveDirX = chosenX - prevX;
+              const moveDirZ = chosenZ - prevZ;
+              if (Math.hypot(moveDirX, moveDirZ) > 0.0001) {
+                const targetBearing = ((Math.atan2(moveDirX, -moveDirZ) * 180 / Math.PI) + 360) % 360;
+                const currentBearing = this.map.getBearing();
+                let diff = targetBearing - currentBearing;
+                while (diff < -180) diff += 360;
+                while (diff > 180) diff -= 360;
+                const newBearing = (currentBearing + diff * Math.min(1.0, delta * 4.5)) % 360;
+
+                this.map.jumpTo({
+                  center: [coords.lng, coords.lat],
+                  bearing: newBearing,
+                });
+              } else {
+                this.map.jumpTo({
+                  center: [coords.lng, coords.lat],
+                });
+              }
+            }
 
             if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
               this.lastChunkCheckX = this.currentPos.x;

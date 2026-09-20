@@ -43,8 +43,8 @@ const DEFAULT_LOCATION: LocationPreset = {
   subname: 'Kochi, Kerala, India',
   lat: 10.005,
   lng: 76.315,
-  zoom: 17,
-  pitch: 48,
+  zoom: 17.8,
+  pitch: 75,
   bearing: 0,
   weather: 'Sunny',
   temp: '29°C',
@@ -68,8 +68,8 @@ function App() {
         subname: '',
         lat,
         lng,
-        zoom: 17,
-        pitch: 48,
+        zoom: 17.8,
+        pitch: 75,
         bearing: 0,
         weather: 'Sunny',
         temp: '29°C',
@@ -85,8 +85,8 @@ function App() {
       subname: place.fullName,
       lat: place.lat,
       lng: place.lng,
-      zoom: 17,
-      pitch: 48,
+      zoom: 17.8,
+      pitch: 75,
       bearing: 0,
       weather: 'Sunny',
       temp: '28°C',
@@ -246,7 +246,7 @@ function App() {
                   map.flyTo({
                     center: [targetPump.lng, targetPump.lat],
                     zoom: 18.2,
-                    pitch: 58,
+                    pitch: 75,
                     bearing: 45,
                     duration: 1400,
                   });
@@ -272,7 +272,7 @@ function App() {
                   map.flyTo({
                     center: [targetStop.lng, targetStop.lat],
                     zoom: 18.5,
-                    pitch: 58,
+                    pitch: 75,
                     bearing: 30,
                     duration: 1200,
                   });
@@ -298,7 +298,7 @@ function App() {
                   map.flyTo({
                     center: [targetGround.lng, targetGround.lat],
                     zoom: 17.8,
-                    pitch: 52,
+                    pitch: 75,
                     bearing: 25,
                     duration: 1300,
                   });
@@ -324,7 +324,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.5,
-                    pitch: 55,
+                    pitch: 75,
                     bearing: 35,
                     duration: 1300,
                   });
@@ -368,7 +368,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.5,
-                    pitch: 54,
+                    pitch: 75,
                     bearing: 25,
                     duration: 1300,
                   });
@@ -405,7 +405,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.5,
-                    pitch: 54,
+                    pitch: 75,
                     bearing: 25,
                     duration: 1300,
                   });
@@ -431,7 +431,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.6,
-                    pitch: 56,
+                    pitch: 75,
                     bearing: 30,
                     duration: 1300,
                   });
@@ -457,7 +457,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.2,
-                    pitch: 52,
+                    pitch: 75,
                     bearing: 20,
                     duration: 1300,
                   });
@@ -483,7 +483,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.2,
-                    pitch: 54,
+                    pitch: 75,
                     bearing: 15,
                     duration: 1300,
                   });
@@ -509,7 +509,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.0,
-                    pitch: 56,
+                    pitch: 75,
                     bearing: 45,
                     duration: 1300,
                   });
@@ -535,7 +535,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.2,
-                    pitch: 56,
+                    pitch: 75,
                     bearing: 40,
                     duration: 1300,
                   });
@@ -561,7 +561,7 @@ function App() {
                   map.flyTo({
                     center: [target.lng, target.lat],
                     zoom: 18.2,
-                    pitch: 58,
+                    pitch: 75,
                     bearing: 35,
                     duration: 1300,
                   });
