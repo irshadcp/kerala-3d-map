@@ -139,7 +139,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.camera = new THREE.Camera();
     this.scene = new THREE.Scene();
 
-    // 1. Setup Three.js WebGLRenderer sharing MapLibre's canvas & GL context
+    // Atmospheric distance fog matching open-world AAA games:
+    // Softens distant 3D boxes into silhouettes and smoothly fades the horizon,
+    // ensuring zero visual stutter or pop-in when looking into the distance
+    this.scene.fog = new THREE.Fog(0xd8edf7, 160, 500);
     this.renderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: gl,
@@ -211,9 +214,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       }
     });
 
-    // 5. Keep MapLibre's vector 3D building extrusion layer visible for distant skyline!
+    // 5. Hide MapLibre's uncleaned raw vector layer to prevent z-fighting with our clean Three.js LOD 3D boxes
     if (map.getLayer('3d-buildings')) {
-      map.setLayoutProperty('3d-buildings', 'visibility', 'visible');
+      map.setLayoutProperty('3d-buildings', 'visibility', 'none');
     }
 
     // 6. Compute origin Mercator coordinate transform
@@ -587,16 +590,23 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.camera.projectionMatrix = this._m.multiply(this._l);
 
     // Synchronize camera world position for accurate Three.js LOD and raycasting
+    const pPos = this.characterController.getPosition();
+    let camX = pPos.x;
+    let camZ = pPos.z;
+    let altitude = 14;
+
     if (this.map && (this.map as any).getFreeCameraOptions) {
       const freeCam = (this.map as any).getFreeCameraOptions();
       if (freeCam && freeCam.position) {
         const lngLat = freeCam.position.toLngLat();
-        const altitude = freeCam.position.toAltitude ? freeCam.position.toAltitude() : 12;
-        const { x: camX, z: camZ } = GeoCoords.toLocalMeters(lngLat.lat, lngLat.lng, this.originLat, this.originLng);
-        this.camera.position.set(camX, altitude, camZ);
-        this.camera.updateMatrixWorld();
+        altitude = freeCam.position.toAltitude ? freeCam.position.toAltitude() : 14;
+        const local = GeoCoords.toLocalMeters(lngLat.lat, lngLat.lng, this.originLat, this.originLng);
+        camX = local.x;
+        camZ = local.z;
       }
     }
+    this.camera.position.set(camX, altitude, camZ);
+    this.camera.updateMatrixWorld();
 
     // In 2D overview mode (zoom < 15.0), suppress 3D Three.js objects for clean Google Maps view
     const currentZoom = this.map.getZoom();

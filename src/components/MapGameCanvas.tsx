@@ -255,6 +255,18 @@ export const MapGameCanvas: React.FC<MapGameCanvasProps> = ({
           map.addLayer(threeLayer);
         }
 
+        try {
+          if (typeof (map as any).setFog === 'function') {
+            (map as any).setFog({
+              range: [1.2, 9.0],
+              color: '#d8edf7',
+              'horizon-blend': 0.18,
+              'high-color': '#bae6fd',
+              'space-color': '#e0f2fe',
+            });
+          }
+        } catch (_e) {}
+
         if (!inputManagerRef.current) {
           inputManagerRef.current = new InputManager();
           inputManagerRef.current.onTogglePerspective = () => {

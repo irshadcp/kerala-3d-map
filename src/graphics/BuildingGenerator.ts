@@ -76,7 +76,13 @@ export class BuildingGenerator {
       if ((building as any).isLOD) {
         const lod = building as THREE.LOD;
         for (let i = 0; i < lod.levels.length; i++) {
-          lod.levels[i].object = mergeGroup(lod.levels[i].object as THREE.Group);
+          const oldObj = lod.levels[i].object;
+          if (oldObj && oldObj.children && oldObj.children.length > 0) {
+            const merged = mergeGroup(oldObj as THREE.Group);
+            lod.remove(oldObj);
+            lod.add(merged);
+            lod.levels[i].object = merged;
+          }
         }
       } else {
         building = mergeGroup(building as THREE.Group);
@@ -475,21 +481,28 @@ export class BuildingGenerator {
 
     lod.position.set(centerX, 0, centerZ);
 
-    // LOD distances: only nearby buildings get heavy storefronts & signs;
-    // distant buildings transition rapidly to clean, lightweight solid 3D boxes
-    const lodDistances: Record<number, [number, number, number]> = {
-      5: [0, 180, 500],   // landmark
-      4: [0, 120, 350],   // major POI
-      3: [0, 80, 220],    // commercial / named
-      2: [0, 60, 160],    // road-facing
-      1: [0, 45, 120],    // residential
-      0: [0, 25, 80],     // background
+    // 4-Tier Open-World LOD System:
+    // Level 0 (0 to d1): High Detail (storefronts, shop signs, Malayalam boards, entrance awnings, roof)
+    // Level 1 (d1 to d2): Medium (clean roof cap + primary identification sign for landmarks)
+    // Level 2 (d2 to d3): Clean OSM 3D Box (solid extruded prism with exact footprint, lightweight)
+    // Level 3 (d3+): Completely culled / empty (hidden in atmospheric horizon fog at distance)
+    const lodDistances: Record<number, [number, number, number, number]> = {
+      5: [0, 180, 280, 520], // Major Landmark (Metro station, hospital, grand mall)
+      4: [0, 150, 240, 460], // Major POI (Supermarkets, banks, clinics)
+      3: [0, 130, 210, 400], // Commercial / shops / restaurants
+      2: [0, 110, 180, 360], // Road-facing residential / offices
+      1: [0, 90, 160, 320],  // Standard houses / residential
+      0: [0, 70, 130, 250],  // Background outbuildings / sheds
     };
-    const [d0, d1, d2] = lodDistances[importanceLevel] ?? lodDistances[1];
+    const [d0, d1, d2, d3] = lodDistances[importanceLevel] ?? lodDistances[1];
+
+    const culledGroup = new THREE.Group();
+    culledGroup.name = 'culled-fog';
 
     lod.addLevel(building, d0);
     lod.addLevel(lod1Group, d1);
     lod.addLevel(lod0Group, d2);
+    lod.addLevel(culledGroup, d3);
 
     return lod;
   }
