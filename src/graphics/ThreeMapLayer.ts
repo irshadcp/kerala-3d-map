@@ -583,6 +583,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.character.update(delta, this.isWalking, 1.25);
     }
 
+    // Procedural water vessel wave floating animation
+    if (this.maritimeManager) {
+      this.maritimeManager.updateFloatingAnimation(now);
+    }
+
     // Sync MapLibre Camera to Three.js Projection
     this._rotationX.makeRotationAxis(new THREE.Vector3(1, 0, 0), this.modelTransform.rotateX);
     this._rotationY.makeRotationAxis(new THREE.Vector3(0, 1, 0), this.modelTransform.rotateY);

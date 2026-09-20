@@ -453,7 +453,7 @@ function App() {
 
           <button
             onClick={() => {
-              const items = (window as any).__maritimeItems?.filter((i: any) => i.type === 'houseboat' || i.type === 'fishing_boat' || i.type === 'boat_jetty');
+              const items = (window as any).__maritimeItems;
               if (items && items.length > 0) {
                 const map = (window as any).__map;
                 if (map) {
@@ -471,10 +471,10 @@ function App() {
               }
             }}
             className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-blue-600 cursor-pointer"
-            title="Jump to Nearest Kerala Houseboat / Boat Jetty"
+            title="Jump to Nearest Water Vessel (സ്പീഡ് ബോട്ട് / പട്രോൾ ബോട്ട് / കണ്ടെയ്നർ കപ്പൽ / അന്തർവാഹിനി / ക്രൂയിസ് കപ്പൽ / സെയ്‌ൽബോട്ട് / ഡിങ്കി / റോബോട്ട്)"
           >
             <Ship size={13} className="text-blue-600" />
-            <span>കെട്ടുവള്ളം</span>
+            <span>ബോട്ടുകൾ & കപ്പലുകൾ</span>
           </button>
 
           <button
