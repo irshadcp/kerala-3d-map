@@ -289,14 +289,38 @@ function App() {
                   ? {
                       name: userProfile.name,
                       district: userProfile.district,
-                      lat: currentLocation.lat,
-                      lng: currentLocation.lng,
+                      lat: multiplayerRef.current?.localLat || currentLocation.lat,
+                      lng: multiplayerRef.current?.localLng || currentLocation.lng,
                     }
                   : null
               }
               remotePlayers={remotePlayersList}
-              onFlyToPlayer={(lat, lng, _name) => {
-                canvasRef.current?.flyToLocation(lat, lng, 18.5);
+              onFlyToPlayer={(lat, lng, name) => {
+                if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+
+                // Spawn slightly offset (~1.5m) next to the remote player
+                const spawnLat = lat + 0.000015;
+                const spawnLng = lng + 0.000015;
+
+                // 1. Teleport 3D character, chunks, and camera
+                canvasRef.current?.teleportToLocation(spawnLat, spawnLng);
+
+                // 2. Update currentLocation state in App
+                setCurrentLocation({
+                  id: 'player_nav_' + Date.now(),
+                  name: `${name}-ന്റെ അടുത്ത്`,
+                  subname: 'Kerala, India',
+                  lat: spawnLat,
+                  lng: spawnLng,
+                  zoom: 18.2,
+                  pitch: 75,
+                  bearing: 0,
+                  weather: 'Sunny',
+                  temp: '28°C',
+                });
+
+                // 3. Immediately notify all peers across WebRTC of new coordinates
+                multiplayerRef.current?.updateLocalTransform(spawnLat, spawnLng, 0, false);
               }}
             />
           </div>

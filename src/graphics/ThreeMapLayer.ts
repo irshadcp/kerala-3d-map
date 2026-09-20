@@ -369,7 +369,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
     this.loadedChunks.clear();
 
-    this.updatePlayerPosition(lat, lng);
+    this.updatePlayerPosition(lat, lng, true);
   }
 
   private updateModelTransform(lat: number, lng: number) {

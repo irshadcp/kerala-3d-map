@@ -144,7 +144,11 @@ export const LivePlayersOverlay: React.FC<LivePlayersOverlayProps> = ({
                   return (
                     <div
                       key={player.id}
-                      className="p-3 rounded-2xl bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md transition-all flex items-center justify-between group"
+                      onClick={() => {
+                        onFlyToPlayer(player.lat, player.lng, player.name);
+                        setIsOpen(false);
+                      }}
+                      className="p-3 rounded-2xl bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md transition-all flex items-center justify-between group cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 text-white font-black flex items-center justify-center text-sm shadow-sm">

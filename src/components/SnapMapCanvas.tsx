@@ -44,6 +44,7 @@ export interface SnapMapCanvasRef {
   getWidenLevel: () => WidenLevel;
   getThreeLayer: () => ThreeMapLayer | null;
   flyToLocation: (lat: number, lng: number, zoom?: number) => void;
+  teleportToLocation: (lat: number, lng: number) => void;
   is3D: boolean;
   isRotateMode: boolean;
 }
@@ -150,6 +151,26 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           zoom,
           pitch,
           duration: 1600,
+        });
+      },
+      teleportToLocation: (lat: number, lng: number) => {
+        if (!map.current || !threeLayer.current) return;
+        playerCoordsRef.current = { lat, lng };
+        is3DRef.current = true;
+        threeLayer.current.set3DMode(true);
+        threeLayer.current.setOrigin(lat, lng);
+        threeLayer.current.updatePlayerPosition(lat, lng, true);
+
+        const zoom = WIDEN_CONFIG[widenLevelRef.current].zoom;
+        const pitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
+        const bearing = map.current.getBearing();
+        const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current);
+
+        map.current.flyTo({
+          center: targetCenter,
+          zoom,
+          pitch,
+          duration: 1400,
         });
       },
       moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
