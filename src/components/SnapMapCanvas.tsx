@@ -176,34 +176,61 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         widenLevelRef.current = level;
         if (!map.current) return;
         const cfg = WIDEN_CONFIG[level];
+
         if (level === 'map') {
+          isTeleportingRef.current = true;
           is3DRef.current = false;
           threeLayer.current?.set3DMode(false);
           map.current.dragPan.enable();
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
-          map.current.easeTo({
+          map.current.flyTo({
             center: [pLng, pLat],
             zoom: cfg.zoom,
             pitch: 0,
-            duration: 600,
-            easing: (t) => t * (2 - t),
+            duration: 650,
           });
+          setTimeout(() => {
+            isTeleportingRef.current = false;
+          }, 700);
         } else {
+          isTeleportingRef.current = true;
           is3DRef.current = true;
-          threeLayer.current?.set3DMode(true);
           map.current.dragPan.disable();
+
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+          playerCoordsRef.current = { lat: pLat, lng: pLng };
+
+          if (threeLayer.current) {
+            threeLayer.current.setOrigin(pLat, pLng);
+            threeLayer.current.updatePlayerPosition(pLat, pLng, true);
+            threeLayer.current.set3DMode(true);
+          }
+
           const bearing = map.current.getBearing();
           const targetCenter = getTargetCenter(pLat, pLng, bearing, level);
-          map.current.easeTo({
+
+          map.current.flyTo({
             center: targetCenter,
             zoom: cfg.zoom,
             pitch: cfg.pitch,
-            duration: 600,
-            easing: (t) => t * (2 - t),
+            bearing,
+            duration: 700,
           });
+
+          if (localMarkerRef.current) {
+            localMarkerRef.current.setLngLat([pLng, pLat]);
+          }
+
+          setTimeout(() => {
+            isTeleportingRef.current = false;
+            if (threeLayer.current && map.current) {
+              threeLayer.current.set3DMode(true);
+              threeLayer.current.updatePlayerPosition(pLat, pLng, true);
+              map.current.triggerRepaint();
+            }
+          }, 750);
         }
       },
       getWidenLevel: () => widenLevelRef.current,
@@ -486,39 +513,29 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           layer.setLocalVoiceState(!!isMuted, !!isSpeaking);
         });
 
-        // Dynamic Snapchat-style 2D/3D zoom transition engine
-        // When zoomed out (< 16.2), auto-ease pitch to 0 and switch to flat 2D mode for zero lag and zero heat!
+        // Dynamic 2D/3D zoom sync on manual user zoom end
         const checkZoomAndMode = () => {
-          if (!map.current || isTeleportingRef.current || widenLevelRef.current === 'map') return;
+          if (!map.current || isTeleportingRef.current || isManualInteractingRef.current) return;
+          // If the user has an explicit 3D view selected (2x, 5x, 10x), do NOT force pitch to 0 or cancel 3D!
+          if (widenLevelRef.current !== 'map') return;
+
           const currentZoom = map.current.getZoom();
           const isCloseEnoughFor3D = currentZoom >= 16.2;
 
-          if (!isCloseEnoughFor3D && is3DRef.current) {
-            is3DRef.current = false;
-            threeLayer.current?.set3DMode(false);
-            map.current.dragPan.enable(); // Enable full Kerala map pan in 2D
-            map.current.easeTo({
-              pitch: 0,
-              duration: 350,
-            });
-          } else if (isCloseEnoughFor3D && !is3DRef.current) {
+          if (isCloseEnoughFor3D && !is3DRef.current) {
             is3DRef.current = true;
             threeLayer.current?.set3DMode(true);
-            map.current.dragPan.disable(); // In 3D mode, swipe rotates camera around character
-            const targetPitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
-            map.current.easeTo({
-              pitch: targetPitch,
-              duration: 350,
-            });
+          } else if (!isCloseEnoughFor3D && is3DRef.current) {
+            is3DRef.current = false;
+            threeLayer.current?.set3DMode(false);
           }
         };
 
-        mapInstance.on('zoom', checkZoomAndMode);
         mapInstance.on('zoomend', checkZoomAndMode);
 
-        // Tap or click to walk/move avatar
+        // Tap or click to walk/move avatar (active only in 3D character mode, disabled in 2D map overview)
         mapInstance.on('click', (e) => {
-          if (!mapInstance || !threeLayer.current || isRotateModeRef.current) return;
+          if (!mapInstance || !threeLayer.current || isRotateModeRef.current || widenLevelRef.current === 'map') return;
 
           const { lng, lat } = e.lngLat;
           playerCoordsRef.current = { lat, lng };

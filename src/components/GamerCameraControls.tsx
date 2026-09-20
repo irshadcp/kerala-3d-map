@@ -11,6 +11,11 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
   widenLevel,
   onWidenChange,
 }) => {
+  const last3DLevelRef = React.useRef<WidenLevel>('2x');
+  if (widenLevel !== 'map') {
+    last3DLevelRef.current = widenLevel;
+  }
+
   // Desktop keyboard hotkeys (2, 5, 0/1 for zoom widenings, M for Map)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -27,7 +32,7 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
         onWidenChange('10x');
       } else if (e.code === 'KeyM') {
         e.preventDefault();
-        onWidenChange(widenLevel === 'map' ? '2x' : 'map');
+        onWidenChange(widenLevel === 'map' ? last3DLevelRef.current : 'map');
       }
     };
 
@@ -69,7 +74,7 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
 
       {/* Map (മാപ്പ്) Toggle Button with Map Icon & Label */}
       <button
-        onClick={() => onWidenChange(isMapActive ? '2x' : 'map')}
+        onClick={() => onWidenChange(isMapActive ? last3DLevelRef.current : 'map')}
         className={`w-12 py-2 px-1 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer active:scale-95 shadow-xl border
           ${
             isMapActive
