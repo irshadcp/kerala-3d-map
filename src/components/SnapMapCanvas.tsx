@@ -8,9 +8,9 @@ export type WidenLevel = '1x' | '2x' | '5x' | '10x';
 
 export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; lookAhead: number; label: string; desc: string }> = {
   '1x': { zoom: 22.0, pitch: 80, lookAhead: 4.5, label: '1x', desc: 'GTA/PUBG Close TPP' },
-  '2x': { zoom: 20.0, pitch: 75, lookAhead: 7.0, label: '2x', desc: 'Wide TPP' },
-  '5x': { zoom: 17.2, pitch: 62, lookAhead: 0, label: '5x', desc: 'High Drone' },
-  '10x': { zoom: 15.0, pitch: 48, lookAhead: 0, label: '10x', desc: 'Tactical Overview' },
+  '2x': { zoom: 20.6, pitch: 76, lookAhead: 5.5, label: '2x', desc: 'Wide TPP' },
+  '5x': { zoom: 19.0, pitch: 66, lookAhead: 6.0, label: '5x', desc: 'High Drone' },
+  '10x': { zoom: 17.2, pitch: 52, lookAhead: 0, label: '10x', desc: 'Tactical Overview' },
 };
 
 export const FPP_CONFIG = { zoom: 22.4, pitch: 84, lookAhead: 0, label: 'FPP', desc: 'First Person' };

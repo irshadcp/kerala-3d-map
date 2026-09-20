@@ -84,14 +84,24 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
             <button
               key={opt.level}
               onClick={() => onWidenChange(opt.level)}
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-[11px] sm:text-xs font-black shadow-lg transition-all ${
+              style={
                 isActive
-                  ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-white ring-2 ring-emerald-300 shadow-emerald-500/30 scale-105 z-10'
-                  : 'text-gray-700 hover:text-emerald-700 hover:bg-white'
+                  ? {
+                      background: 'linear-gradient(135deg, #059669, #0d9488)',
+                      color: '#ffffff',
+                      border: '2px solid #34d399',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.45)',
+                    }
+                  : undefined
+              }
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full ${
+                !isActive ? 'glass-pill-button text-gray-800' : ''
+              } flex items-center justify-center text-[11px] sm:text-xs font-black shadow-lg transition-all cursor-pointer ${
+                isActive ? 'scale-110 z-10' : 'hover:text-emerald-700 hover:bg-white'
               }`}
               title={`${opt.title} View — ${opt.desc}`}
             >
-              <span>{opt.title}</span>
+              <span className={isActive ? 'text-white drop-shadow-sm font-black' : 'font-extrabold'}>{opt.title}</span>
             </button>
           );
         })}
