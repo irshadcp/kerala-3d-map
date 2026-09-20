@@ -20,7 +20,14 @@ export type KeralaAssetType =
   | 'breakwater'
   | 'fishing_house'
   | 'net_drying_rack'
-  | 'harbour_complex';
+  | 'harbour_complex'
+  | 'roadside_shops'
+  | 'parking_area'
+  | 'street_light'
+  | 'hospital'
+  | 'commercial_complex'
+  | 'hotel'
+  | 'apartment_tower';
 
 export interface ZoneProfile {
   type: KeralaZoneType;
@@ -51,6 +58,13 @@ export interface ZoneProfile {
     breakwater?: number;
     fishingHouse?: number;
     harbour?: number;
+    roadsideShops?: number;
+    parkingArea?: number;
+    streetLight?: number;
+    hospital?: number;
+    commercialComplex?: number;
+    hotel?: number;
+    apartmentTower?: number;
   };
 }
 
@@ -67,6 +81,13 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'traffic_signal',
       'billboard',
       'worship_place',
+      'roadside_shops',
+      'parking_area',
+      'street_light',
+      'hospital',
+      'commercial_complex',
+      'hotel',
+      'apartment_tower',
     ],
     treeProfile: {
       baseDensity: 5, // Lower tree density in dense concrete city centers
@@ -80,6 +101,13 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       trafficSignal: 180,
       billboard: 250,
       worshipPlace: 800,
+      roadsideShops: 160,
+      parkingArea: 320,
+      streetLight: 50,
+      hospital: 800,
+      commercialComplex: 600,
+      hotel: 700,
+      apartmentTower: 500,
     },
   },
 
@@ -97,6 +125,11 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'worship_place',
       'traffic_signal',
       'billboard',
+      'roadside_shops',
+      'parking_area',
+      'street_light',
+      'hotel',
+      'apartment_tower',
     ],
     treeProfile: {
       baseDensity: 10,
@@ -111,6 +144,11 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       worshipPlace: 600,
       trafficSignal: 300,
       billboard: 400,
+      roadsideShops: 200,
+      parkingArea: 400,
+      streetLight: 60,
+      hotel: 900,
+      apartmentTower: 650,
     },
   },
 

@@ -28,7 +28,8 @@ import {
   Ship,
   Landmark,
   Mountain,
-  Waves
+  Waves,
+  Building2
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -435,6 +436,32 @@ function App() {
           >
             <Waves size={13} className="text-cyan-600" />
             <span>തീരദേശം</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const items = (window as any).__urbanItems;
+              if (items && items.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__urbanIdx || 0) % items.length;
+                  (window as any).__urbanIdx = nextIdx + 1;
+                  const target = items[nextIdx];
+                  map.flyTo({
+                    center: [target.lng, target.lat],
+                    zoom: 18.2,
+                    pitch: 58,
+                    bearing: 35,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-indigo-600 cursor-pointer"
+            title="Jump to Nearest Kerala Urban Element (കടകൾ / മാൾ / ഹോസ്പിറ്റൽ / പാർക്കിംഗ് / സിഗ്നൽ)"
+          >
+            <Building2 size={13} className="text-indigo-600" />
+            <span>നഗരം</span>
           </button>
         </div>
       </div>
