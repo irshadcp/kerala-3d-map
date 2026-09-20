@@ -8,9 +8,9 @@ export type WidenLevel = '1x' | '2x' | '5x' | '10x';
 
 export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; lookAhead: number; label: string; desc: string }> = {
   '1x': { zoom: 22.0, pitch: 80, lookAhead: 4.5, label: '1x', desc: 'GTA/PUBG Close TPP' },
-  '2x': { zoom: 20.6, pitch: 76, lookAhead: 5.5, label: '2x', desc: 'Wide TPP' },
-  '5x': { zoom: 19.0, pitch: 66, lookAhead: 6.0, label: '5x', desc: 'High Drone' },
-  '10x': { zoom: 17.2, pitch: 52, lookAhead: 0, label: '10x', desc: 'Tactical Overview' },
+  '2x': { zoom: 20.6, pitch: 68, lookAhead: 4.0, label: '2x', desc: 'Wide TPP' },
+  '5x': { zoom: 19.0, pitch: 50, lookAhead: 2.0, label: '5x', desc: 'High Drone' },
+  '10x': { zoom: 17.2, pitch: 30, lookAhead: 0, label: '10x', desc: 'Tactical Overview' },
 };
 
 export const FPP_CONFIG = { zoom: 22.4, pitch: 84, lookAhead: 0, label: 'FPP', desc: 'First Person' };
@@ -221,10 +221,29 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               }
             }
 
+            // Smart Occlusion Detection: Auto-elevate camera pitch if building blocks line of sight
+            let basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
+            let targetPitch = basePitch;
+
+            if (perspectiveRef.current === 'tpp' && is3DRef.current && threeLayer.current) {
+              const camDist = widenLevelRef.current === '1x' ? 14 : (widenLevelRef.current === '2x' ? 30 : 55);
+              const isBlocked = threeLayer.current.isCameraOccluded(camDist, newBearing);
+              if (isBlocked) {
+                targetPitch = Math.max(46, basePitch - 24);
+              }
+            }
+
+            const currentMapPitch = map.current.getPitch();
+            let nextPitch = currentMapPitch;
+            if (Math.abs(currentMapPitch - targetPitch) > 0.4) {
+              nextPitch = currentMapPitch + (targetPitch - currentMapPitch) * 0.12;
+            }
+
             const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current, perspectiveRef.current);
             map.current.jumpTo({
               center: targetCenter,
               bearing: newBearing,
+              pitch: nextPitch,
             });
           }
           if (onPlayerMove) {
@@ -273,10 +292,30 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
             const turnRate = perspectiveRef.current === 'fpp' ? 0.08 : 0.045;
             const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnRate + 360) % 360 : currentBearing;
+
+            // Smart Occlusion Detection: Auto-elevate camera pitch if building blocks line of sight
+            let basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
+            let targetPitch = basePitch;
+
+            if (perspectiveRef.current === 'tpp' && is3DRef.current && threeLayer.current) {
+              const camDist = widenLevelRef.current === '1x' ? 14 : (widenLevelRef.current === '2x' ? 30 : 55);
+              const isBlocked = threeLayer.current.isCameraOccluded(camDist, newBearing);
+              if (isBlocked) {
+                targetPitch = Math.max(46, basePitch - 24);
+              }
+            }
+
+            const currentMapPitch = map.current.getPitch();
+            let nextPitch = currentMapPitch;
+            if (Math.abs(currentMapPitch - targetPitch) > 0.4) {
+              nextPitch = currentMapPitch + (targetPitch - currentMapPitch) * 0.12;
+            }
+
             const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current, perspectiveRef.current);
             map.current.jumpTo({
               center: targetCenter,
               bearing: newBearing,
+              pitch: nextPitch,
             });
           }
         }

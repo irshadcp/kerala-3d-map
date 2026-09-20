@@ -21,6 +21,9 @@ export class RealisticCharacter {
   private leftLegPivot: THREE.Group;
   private rightLegPivot: THREE.Group;
   private shadowMesh: THREE.Mesh;
+  private beaconHaloMat!: THREE.MeshBasicMaterial;
+  private beaconHaloMesh!: THREE.Mesh;
+  private markerMesh!: THREE.Mesh;
 
   // Animation state
   private animPhase = 0;
@@ -226,6 +229,38 @@ export class RealisticCharacter {
     this.shadowMesh.position.y = 0.04;
     this.group.add(this.shadowMesh);
 
+    // =========================================================================
+    // 6. Always-Visible Player Locator Halo & Overhead Beacon (Occlusion Visibility)
+    // =========================================================================
+    const haloGeo = new THREE.RingGeometry(0.35 * scale, 0.72 * scale, 32);
+    this.beaconHaloMat = new THREE.MeshBasicMaterial({
+      color: 0x10b981,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.beaconHaloMesh = new THREE.Mesh(haloGeo, this.beaconHaloMat);
+    this.beaconHaloMesh.rotation.x = -Math.PI / 2;
+    this.beaconHaloMesh.position.y = 0.08 * scale;
+    this.beaconHaloMesh.renderOrder = 9999;
+    this.group.add(this.beaconHaloMesh);
+
+    // Overhead Floating Navigator Diamond (GTA/PUBG Player Marker)
+    const markerGeo = new THREE.OctahedronGeometry(0.18 * scale);
+    const markerMat = new THREE.MeshBasicMaterial({
+      color: 0x34d399,
+      transparent: true,
+      opacity: 0.92,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.markerMesh = new THREE.Mesh(markerGeo, markerMat);
+    this.markerMesh.position.y = 2.65 * scale;
+    this.markerMesh.renderOrder = 9999;
+    this.group.add(this.markerMesh);
+
     // Grounded scale for high camera visibility
     this.group.scale.set(1.5, 1.5, 1.5);
   }
@@ -294,6 +329,15 @@ export class RealisticCharacter {
       // Gentle chest rise & fall
       this.torso.position.y = 1.35 * this.scale + breath * 0.02 * this.scale;
       this.shadowMesh.scale.setScalar(this.scale);
+    }
+
+    // 3. Pulse X-Ray Beacon & Rotate Overhead Diamond
+    if (this.markerMesh) {
+      this.markerMesh.rotation.y += delta * 2.2;
+      this.markerMesh.position.y = 2.65 * this.scale + Math.sin(this.animPhase * 2.2) * (0.05 * this.scale);
+    }
+    if (this.beaconHaloMat) {
+      this.beaconHaloMat.opacity = 0.65 + Math.sin(this.animPhase * 3.2) * 0.25;
     }
   }
 

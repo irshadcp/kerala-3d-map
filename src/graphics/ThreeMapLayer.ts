@@ -228,6 +228,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     );
   }
 
+  public isCameraOccluded(distance: number, bearing: number): boolean {
+    if (!this.obstacleMap || !this.obstacleMap.isReady) return false;
+    const bRad = (bearing * Math.PI) / 180;
+    const camX = this.currentPos.x - Math.sin(bRad) * distance;
+    const camZ = this.currentPos.y + Math.cos(bRad) * distance;
+    return this.obstacleMap.isLineOfSightOccluded(this.currentPos.x, this.currentPos.y, camX, camZ);
+  }
+
   public getPlayerLngLat(): { lng: number; lat: number } {
     const s = this.modelTransform.scale;
     const mx = this.modelTransform.translateX + this.currentPos.x * s;

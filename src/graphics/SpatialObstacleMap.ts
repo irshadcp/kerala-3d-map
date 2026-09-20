@@ -868,4 +868,39 @@ export class SpatialObstacleMap {
 
     return ZoneClassifier.classify(coords.lat, coords.lng, context);
   }
+
+  /**
+   * Checks if any building obstacle intersects the line of sight between
+   * the player position (p1) and camera position (p2).
+   */
+  public isLineOfSightOccluded(p1x: number, p1z: number, p2x: number, p2z: number): boolean {
+    if (!this.isReady) return false;
+
+    const dx = p2x - p1x;
+    const dz = p2z - p1z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 1.5) return false;
+
+    // Sample along the ray from player to camera at 2.0m intervals
+    const stepCount = Math.min(25, Math.max(3, Math.floor(dist / 2.0)));
+    for (let i = 1; i <= stepCount; i++) {
+      const t = i / (stepCount + 1);
+      const sx = p1x + dx * t;
+      const sz = p1z + dz * t;
+
+      const cellX = Math.floor(sx / BUCKET_SIZE);
+      const cellZ = Math.floor(sz / BUCKET_SIZE);
+      const bldgs = this.buildingBuckets.get(this.getBucketKey(cellX, cellZ));
+      if (!bldgs) continue;
+
+      for (const b of bldgs) {
+        if (sx >= b.minX - 0.5 && sx <= b.maxX + 0.5 && sz >= b.minZ - 0.5 && sz <= b.maxZ + 0.5) {
+          if (this.pointInPolygon(sx, sz, b.rings[0])) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
 }
