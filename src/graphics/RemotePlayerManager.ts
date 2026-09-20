@@ -44,9 +44,26 @@ export class RemotePlayerManager {
   private scene: THREE.Scene;
   public players = new Map<string, RemotePlayerInstance>();
   private audioContext: AudioContext | null = null;
+  private pendingAudioStreams = new Map<string, MediaStream>();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+
+    // Listen for first user tap or keypress to unblock browser audio autoplay policies
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {});
+        }
+        for (const p of this.players.values()) {
+          if (p.audioElement && p.audioElement.paused) {
+            p.audioElement.play().catch(() => {});
+          }
+        }
+      };
+      window.addEventListener('pointerdown', unlockAudio, { passive: true, once: false });
+      window.addEventListener('keydown', unlockAudio, { passive: true, once: false });
+    }
   }
 
   public setAudioContext(ctx: AudioContext) {
@@ -78,10 +95,15 @@ export class RemotePlayerManager {
   ) {
     let player = this.players.get(data.id);
 
-    const localTarget = GeoCoords.toLocalMeters(data.lat, data.lng, originLat, originLng);
+    const hasValidCoords = typeof data.lat === 'number' && typeof data.lng === 'number' && !isNaN(data.lat) && !isNaN(data.lng);
+    const localTarget = hasValidCoords
+      ? GeoCoords.toLocalMeters(data.lat, data.lng, originLat, originLng)
+      : null;
 
     if (!player) {
-      // Spawn new remote player
+      // Must have valid initial coordinates to spawn a player in the 3D scene
+      if (!localTarget) return;
+
       const group = new THREE.Group();
       group.name = `remote_player_${data.id}`;
 
@@ -117,61 +139,106 @@ export class RemotePlayerManager {
       };
 
       this.players.set(data.id, player);
+
+      // Check if an audio stream arrived before this player was initialized
+      const pendingStream = this.pendingAudioStreams.get(data.id);
+      if (pendingStream) {
+        this.attachAudioStreamToPlayer(player, pendingStream);
+      }
     } else {
-      // Drop older out-of-order packets if timestamp is older
-      if (data.t && data.t < player.lastTransformTime) {
+      // Drop out-of-order packets if timestamp is older
+      if (data.t && player.lastTransformTime && data.t < player.lastTransformTime) {
         return;
       }
       if (data.t) {
         player.lastTransformTime = data.t;
       }
 
-      // Update existing player
+      // Update player data
       player.data = { ...player.data, ...data };
-      player.targetPos.set(localTarget.x, localTarget.z);
-      player.targetHeading = data.heading;
       player.lastSeen = Date.now();
 
-      // If remote player jumped far (e.g. search / initial teleport), snap immediately without lagging
-      if (player.currentPos.distanceTo(player.targetPos) > 30) {
-        player.currentPos.copy(player.targetPos);
+      if (localTarget) {
+        player.targetPos.set(localTarget.x, localTarget.z);
+        if (typeof data.heading === 'number') {
+          player.targetHeading = data.heading;
+        }
+
+        // Snap immediately if teleported or searched far away (> 35 meters)
+        if (player.currentPos.distanceTo(player.targetPos) > 35) {
+          player.currentPos.copy(player.targetPos);
+        }
       }
 
       player.nameplate.update({
-        name: data.name,
-        district: data.district,
-        isMuted: data.isMuted,
-        isSpeaking: data.isSpeaking,
+        name: player.data.name,
+        district: player.data.district,
+        isMuted: player.data.isMuted,
+        isSpeaking: player.data.isSpeaking,
       });
     }
+  }
+
+  /**
+   * Update mute or speaking state without ever altering player 3D coordinates.
+   */
+  public updatePlayerState(id: string, isMuted?: boolean, isSpeaking?: boolean) {
+    const player = this.players.get(id);
+    if (!player) return;
+
+    if (isMuted !== undefined) player.data.isMuted = isMuted;
+    if (isSpeaking !== undefined) player.data.isSpeaking = isSpeaking;
+
+    player.nameplate.update({
+      name: player.data.name,
+      district: player.data.district,
+      isMuted: player.data.isMuted,
+      isSpeaking: player.data.isSpeaking,
+    });
   }
 
   public registerAudioStream(
     playerId: string,
     remoteStream: MediaStream,
-    audioCtx: AudioContext
+    audioCtx?: AudioContext
   ) {
-    this.audioContext = audioCtx;
+    if (audioCtx) {
+      this.audioContext = audioCtx;
+    }
+    this.pendingAudioStreams.set(playerId, remoteStream);
+
     const player = this.players.get(playerId);
+    if (player) {
+      this.attachAudioStreamToPlayer(player, remoteStream);
+    }
+  }
 
+  private attachAudioStreamToPlayer(player: RemotePlayerInstance, stream: MediaStream) {
     try {
-      // Dummy audio element to satisfy browser autoplay policies, but MUTED to prevent bypassing gainNode!
+      if (player.audioElement) {
+        player.audioElement.srcObject = null;
+      }
+
+      // Direct HTMLAudioElement - 100% reliable across iOS Safari, Android Chrome, and Desktop
       const audio = new Audio();
-      audio.srcObject = remoteStream;
-      audio.muted = true;
+      audio.srcObject = stream;
       audio.autoplay = true;
+      (audio as any).playsInline = true;
+      audio.muted = false;
+      audio.volume = 0; // Starts at 0, smoothly attenuated by 3D distance in update()
       audio.play().catch(() => {});
+      player.audioElement = audio;
 
-      const source = audioCtx.createMediaStreamSource(remoteStream);
-      const gainNode = audioCtx.createGain();
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // Start at 0, smoothly fade in by distance
-
-      source.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      if (player) {
-        player.gainNode = gainNode;
-        player.audioElement = audio;
+      // Optional Web Audio API gain routing
+      if (this.audioContext) {
+        try {
+          const source = this.audioContext.createMediaStreamSource(stream);
+          const gainNode = this.audioContext.createGain();
+          gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+          source.connect(gainNode);
+          gainNode.connect(this.audioContext.destination);
+          player.gainNode = gainNode;
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('[RemotePlayerManager] Error setting up audio stream:', err);
@@ -180,6 +247,7 @@ export class RemotePlayerManager {
 
   public removePlayer(id: string) {
     const player = this.players.get(id);
+    this.pendingAudioStreams.delete(id);
     if (!player) return;
 
     this.scene.remove(player.group);
@@ -200,6 +268,7 @@ export class RemotePlayerManager {
     }
 
     if (player.audioElement) {
+      player.audioElement.pause();
       player.audioElement.srcObject = null;
     }
 
@@ -230,8 +299,8 @@ export class RemotePlayerManager {
     const toRemove: string[] = [];
 
     for (const [id, player] of this.players) {
-      // Ephemeral pruning fallback: If remote player hasn't broadcast in 12 seconds, prune cleanly
-      if (now - player.lastSeen > 12000) {
+      // Prune inactive peers after 15 seconds without updates
+      if (now - player.lastSeen > 15000) {
         toRemove.push(id);
         continue;
       }
@@ -271,21 +340,33 @@ export class RemotePlayerManager {
       }
 
       // Proximity Voice Chat: calculate real-time 3D audio attenuation
-      if (player.gainNode && this.audioContext) {
-        const dist = Math.hypot(
-          player.currentPos.x - localPlayerX,
-          player.currentPos.y - localPlayerZ
-        );
-        const maxAudibleDist = 45; // 45 meters audible threshold
+      const dist = Math.hypot(
+        player.currentPos.x - localPlayerX,
+        player.currentPos.y - localPlayerZ
+      );
+      const maxAudibleDist = 45; // 45 meters audible threshold
 
-        let gain = 0;
-        if (dist < maxAudibleDist && !player.data.isMuted) {
-          // Quadratic attenuation: (1 - d/max)^2 gives realistic spatial sound
-          gain = Math.pow(1 - dist / maxAudibleDist, 2);
-        }
+      let targetGain = 0;
+      if (dist < maxAudibleDist && !player.data.isMuted) {
+        // Quadratic distance attenuation for realistic spatial sound
+        targetGain = Math.pow(1 - dist / maxAudibleDist, 2);
+      }
+      targetGain = Math.max(0, Math.min(1, targetGain));
 
+      // 1. Direct HTMLAudioElement volume adjustment
+      if (player.audioElement) {
         try {
-          player.gainNode.gain.setTargetAtTime(gain, this.audioContext.currentTime, 0.08);
+          player.audioElement.volume = targetGain;
+          if (targetGain > 0 && player.audioElement.paused) {
+            player.audioElement.play().catch(() => {});
+          }
+        } catch (_) {}
+      }
+
+      // 2. Web Audio API gain adjustment
+      if (player.gainNode && this.audioContext) {
+        try {
+          player.gainNode.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.08);
         } catch (_) {}
       }
     }
@@ -299,5 +380,6 @@ export class RemotePlayerManager {
     for (const id of Array.from(this.players.keys())) {
       this.removePlayer(id);
     }
+    this.pendingAudioStreams.clear();
   }
 }

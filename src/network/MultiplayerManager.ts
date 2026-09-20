@@ -1,4 +1,4 @@
-import { joinRoom, Room, selfId } from '@trystero-p2p/mqtt';
+import { joinRoom, Room, selfId } from 'trystero';
 import { RemotePlayerData } from '../graphics/RemotePlayerManager';
 
 export interface LocalUserProfile {
@@ -10,8 +10,8 @@ export interface LocalUserProfile {
 /**
  * MultiplayerManager
  * 100% Free & Serverless cross-device Real-Time Multiplayer + WebRTC Proximity Voice Chat.
- * Uses @trystero-p2p/mqtt over public redundant MQTT brokers (HiveMQ, EMQX, Mosquitto)
- * to connect mobile phones, laptops, and tablets anywhere in the world.
+ * Uses trystero over 28 redundant public Nostr relays on standard HTTPS/WSS port 443
+ * to reliably connect mobile phones (Jio/Airtel/Vi 4G/5G, iOS, Android) and laptops anywhere in the world.
  * Zero database storage, zero API keys, 100% ephemeral and zero cost.
  */
 export class MultiplayerManager {
@@ -45,9 +45,10 @@ export class MultiplayerManager {
 
   // Event Listeners
   public onPlayerUpdate?: (player: RemotePlayerData) => void;
+  public onPlayerStateChange?: (id: string, isMuted: boolean, isSpeaking: boolean) => void;
   public onPlayerRemove?: (id: string) => void;
   public onPlayerCountChange?: (count: number) => void;
-  public onRemoteStream?: (peerId: string, stream: MediaStream, audioCtx: AudioContext) => void;
+  public onRemoteStream?: (peerId: string, stream: MediaStream, audioCtx?: AudioContext) => void;
   public onMuteStateChange?: (muted: boolean) => void;
   public onLocalSpeakingChange?: (speaking: boolean) => void;
 
@@ -59,7 +60,7 @@ export class MultiplayerManager {
     this.localLat = initialLat;
     this.localLng = initialLng;
 
-    // 1. Initialize Trystero P2P MQTT Room (connects cross-device across the internet)
+    // 1. Initialize Trystero P2P Room (Standard WSS Port 443 with 28 public Nostr relays)
     const APP_ID = 'kerala-3d-map-realtime-2026';
     const ROOM_NAME = 'kerala-global-room';
 
@@ -94,10 +95,12 @@ export class MultiplayerManager {
         if (!this.isDestroyed) {
           this.broadcastSelfProfile(peerId);
         }
-      }, 500);
+      }, 600);
 
       if (this.localStream) {
-        this.room.addStream(this.localStream, { target: peerId });
+        try {
+          this.room.addStream(this.localStream, { target: peerId });
+        } catch (_) {}
       }
       this.notifyCountChange();
     };
@@ -109,50 +112,89 @@ export class MultiplayerManager {
 
     // Handle incoming peer profiles
     profileAction.onMessage = (data: any, context) => {
-      const peerId = context.peerId;
-      if (peerId === selfId || peerId === this.profile.id) return;
+      const peerId = typeof context === 'string' ? context : context?.peerId || data?.peerId;
+      if (!peerId || peerId === selfId || peerId === this.profile.id) return;
 
       const isNew = !this.remotePlayers.has(peerId);
-      const player: RemotePlayerData = {
-        id: peerId,
-        name: data.name || 'Explorer',
-        district: data.district || 'Kerala',
-        lat: typeof data.lat === 'number' ? data.lat : this.localLat,
-        lng: typeof data.lng === 'number' ? data.lng : this.localLng,
-        heading: data.heading || 0,
-        isWalking: Boolean(data.isWalking),
-        isDriving: Boolean(data.isDriving),
-        isMuted: Boolean(data.isMuted),
-        isSpeaking: Boolean(data.isSpeaking),
-      };
+      let player = this.remotePlayers.get(peerId);
 
-      this.remotePlayers.set(peerId, player);
+      if (isNew || !player) {
+        player = {
+          id: peerId,
+          name: data.name || 'Explorer',
+          district: data.district || 'Kerala',
+          lat: typeof data.lat === 'number' ? data.lat : this.localLat,
+          lng: typeof data.lng === 'number' ? data.lng : this.localLng,
+          heading: data.heading || 0,
+          isWalking: Boolean(data.isWalking),
+          isDriving: Boolean(data.isDriving),
+          isMuted: Boolean(data.isMuted),
+          isSpeaking: Boolean(data.isSpeaking),
+          t: data.t || Date.now(),
+        };
 
-      if (this.onPlayerUpdate) {
-        this.onPlayerUpdate(player);
-      }
+        this.remotePlayers.set(peerId, player);
 
-      if (isNew) {
+        if (this.onPlayerUpdate) {
+          this.onPlayerUpdate(player);
+        }
         this.notifyCountChange();
-        // Reply with our profile so the other peer also has our info
+        // Reply with our profile so the new peer immediately receives our info
         this.broadcastSelfProfile(peerId);
+      } else {
+        // Player already exists - ONLY update metadata to avoid movement jitter!
+        let updated = false;
+        if (data.name && player.name !== data.name) {
+          player.name = data.name;
+          updated = true;
+        }
+        if (data.district && player.district !== data.district) {
+          player.district = data.district;
+          updated = true;
+        }
+        if (data.isMuted !== undefined && player.isMuted !== data.isMuted) {
+          player.isMuted = data.isMuted;
+          updated = true;
+        }
+        if (data.isSpeaking !== undefined && player.isSpeaking !== data.isSpeaking) {
+          player.isSpeaking = data.isSpeaking;
+          updated = true;
+        }
+
+        // Only update coords if data has a timestamp strictly newer than last known transform
+        if (data.t && (!player.t || data.t > player.t) && typeof data.lat === 'number' && typeof data.lng === 'number') {
+          player.t = data.t;
+          player.lat = data.lat;
+          player.lng = data.lng;
+          if (data.heading !== undefined) player.heading = data.heading;
+          if (data.isWalking !== undefined) player.isWalking = Boolean(data.isWalking);
+          if (data.isDriving !== undefined) player.isDriving = Boolean(data.isDriving);
+          updated = true;
+        }
+
+        if (updated && this.onPlayerUpdate) {
+          this.onPlayerUpdate(player);
+        }
       }
     };
 
     // Handle incoming coordinate / movement updates
     transformAction.onMessage = (data: any, context) => {
-      const peerId = context.peerId;
+      const peerId = typeof context === 'string' ? context : context?.peerId || data?.peerId;
+      if (!peerId) return;
+
       const player = this.remotePlayers.get(peerId);
       if (player) {
+        // Drop older out-of-order movement packets
         if (data.t && player.t && data.t < player.t) {
           return;
         }
-        player.t = data.t;
-        player.lat = data.lat;
-        player.lng = data.lng;
-        player.heading = data.heading;
-        player.isWalking = data.isWalking;
-        player.isDriving = Boolean(data.isDriving);
+        player.t = data.t || Date.now();
+        if (typeof data.lat === 'number') player.lat = data.lat;
+        if (typeof data.lng === 'number') player.lng = data.lng;
+        if (typeof data.heading === 'number') player.heading = data.heading;
+        if (data.isWalking !== undefined) player.isWalking = Boolean(data.isWalking);
+        if (data.isDriving !== undefined) player.isDriving = Boolean(data.isDriving);
 
         if (this.onPlayerUpdate) {
           this.onPlayerUpdate(player);
@@ -160,15 +202,19 @@ export class MultiplayerManager {
       }
     };
 
-    // Handle incoming state updates (mute / speaking)
+    // Handle incoming state updates (mute / speaking) - NEVER touch coordinates!
     stateAction.onMessage = (data: any, context) => {
-      const peerId = context.peerId;
+      const peerId = typeof context === 'string' ? context : context?.peerId || data?.peerId;
+      if (!peerId) return;
+
       const player = this.remotePlayers.get(peerId);
       if (player) {
-        if (data.isMuted !== undefined) player.isMuted = data.isMuted;
-        if (data.isSpeaking !== undefined) player.isSpeaking = data.isSpeaking;
+        if (data.isMuted !== undefined) player.isMuted = Boolean(data.isMuted);
+        if (data.isSpeaking !== undefined) player.isSpeaking = Boolean(data.isSpeaking);
 
-        if (this.onPlayerUpdate) {
+        if (this.onPlayerStateChange) {
+          this.onPlayerStateChange(peerId, Boolean(player.isMuted), Boolean(player.isSpeaking));
+        } else if (this.onPlayerUpdate) {
           this.onPlayerUpdate(player);
         }
       }
@@ -176,11 +222,12 @@ export class MultiplayerManager {
 
     // Handle incoming WebRTC audio stream for Proximity Voice Chat
     this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
-      if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!this.audioContext && typeof window !== 'undefined') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) this.audioContext = new AudioCtx();
       }
       if (this.onRemoteStream) {
-        this.onRemoteStream(peerId, stream, this.audioContext);
+        this.onRemoteStream(peerId, stream, this.audioContext || undefined);
       }
     };
 
@@ -194,13 +241,19 @@ export class MultiplayerManager {
       }
     } catch (_) {}
 
-    // Heartbeat every 2.0s to ensure all connected peers have latest coordinates
+    // Heartbeat every 2.5s to ensure all connected peers retain profile info
     this.heartbeatTimer = window.setInterval(() => {
       this.broadcastSelfProfile();
       this.notifyCountChange();
-    }, 2000);
+    }, 2500);
 
     this.initExitHandlers();
+  }
+
+  public updateProfile(name: string, district: string) {
+    this.profile.name = name;
+    this.profile.district = district;
+    this.broadcastSelfProfile();
   }
 
   private broadcastSelfProfile(targetPeerId?: string) {
@@ -215,6 +268,7 @@ export class MultiplayerManager {
       isDriving: this.localIsDriving,
       isMuted: this.isMuted,
       isSpeaking: this.isSpeaking,
+      t: Date.now(),
     };
 
     try {
@@ -245,14 +299,14 @@ export class MultiplayerManager {
     if (isDriving !== undefined) {
       this.localIsDriving = isDriving;
     }
-    const timeElapsed = now - this.lastTransformSent >= 75; // Rate limit to max 13 updates/sec
+    const timeElapsed = now - this.lastTransformSent >= 60; // Max ~16 updates/sec for smooth 60fps interpolation
 
     this.localLat = lat;
     this.localLng = lng;
     this.localHeading = heading;
     this.localIsWalking = isWalking;
 
-    // Send packet immediately if walking/driving state changed, or after 75ms
+    // Send packet immediately if walking/driving state changed, or after 60ms
     if (walkingChanged || drivingChanged || timeElapsed) {
       this.lastTransformSent = now;
       const data = {
@@ -296,7 +350,7 @@ export class MultiplayerManager {
         isDriving: Boolean(msg.data.isDriving),
         isMuted: msg.data.isMuted,
         isSpeaking: msg.data.isSpeaking,
-        t: msg.data.t,
+        t: msg.data.t || Date.now(),
       };
       this.remotePlayers.set(msg.peerId, player);
       if (this.onPlayerUpdate) this.onPlayerUpdate(player);
@@ -307,7 +361,7 @@ export class MultiplayerManager {
         if (msg.data.t && p.t && msg.data.t < p.t) {
           return;
         }
-        p.t = msg.data.t;
+        p.t = msg.data.t || Date.now();
         p.lat = msg.data.lat;
         p.lng = msg.data.lng;
         p.heading = msg.data.heading;
@@ -320,7 +374,11 @@ export class MultiplayerManager {
       if (p) {
         if (msg.data.isMuted !== undefined) p.isMuted = msg.data.isMuted;
         if (msg.data.isSpeaking !== undefined) p.isSpeaking = msg.data.isSpeaking;
-        if (this.onPlayerUpdate) this.onPlayerUpdate(p);
+        if (this.onPlayerStateChange) {
+          this.onPlayerStateChange(msg.peerId, Boolean(p.isMuted), Boolean(p.isSpeaking));
+        } else if (this.onPlayerUpdate) {
+          this.onPlayerUpdate(p);
+        }
       }
     } else if (msg.type === 'leave') {
       this.removeRemotePeer(msg.peerId);
@@ -350,7 +408,12 @@ export class MultiplayerManager {
   // =========================================================================
 
   public async enableMicrophone(): Promise<boolean> {
-    if (this.localStream) return true;
+    if (this.localStream) {
+      if (this.isMuted) {
+        this.toggleMute();
+      }
+      return true;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -363,20 +426,39 @@ export class MultiplayerManager {
       });
 
       this.localStream = stream;
-      if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.isMuted = false;
+
+      if (!this.audioContext && typeof window !== 'undefined') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) this.audioContext = new AudioCtx();
+      }
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume().catch(() => {});
       }
 
       // Voice level detection
-      const source = this.audioContext.createMediaStreamSource(stream);
-      this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 256;
-      source.connect(this.analyser);
+      if (this.audioContext) {
+        try {
+          const source = this.audioContext.createMediaStreamSource(stream);
+          this.analyser = this.audioContext.createAnalyser();
+          this.analyser.fftSize = 256;
+          source.connect(this.analyser);
+          this.startVoiceLevelDetection();
+        } catch (_) {}
+      }
 
-      this.startVoiceLevelDetection();
+      // Broadcast local microphone audio stream to all peers in the room
+      try {
+        this.room.addStream(stream);
+      } catch (_) {}
 
-      // Send local microphone audio stream to all peers in the room
-      this.room.addStream(stream);
+      try {
+        this.sendState({ isMuted: false });
+      } catch (_) {}
+
+      if (this.onMuteStateChange) {
+        this.onMuteStateChange(false);
+      }
 
       return true;
     } catch (err) {

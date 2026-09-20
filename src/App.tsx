@@ -66,8 +66,12 @@ function App() {
   const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
   const [performanceTier, setPerformanceTierState] = useState<PerformanceTier>(() => detectDeviceTier());
 
-  // User profile state - 100% ephemeral in memory, never stored in localStorage
-  const [userProfile, setUserProfile] = useState<LocalUserProfile | null>(null);
+  // User profile state - auto-generated ephemeral profile so P2P networking connects immediately on load
+  const [userProfile, setUserProfile] = useState<LocalUserProfile>(() => ({
+    id: 'kerala_' + Math.random().toString(36).substring(2, 9),
+    name: 'Explorer_' + Math.floor(Math.random() * 1000),
+    district: 'Kerala',
+  }));
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(true);
   const [remotePlayersList, setRemotePlayersList] = useState<RemotePlayerData[]>([]);
   const [isMuted, setIsMuted] = useState(false);
@@ -103,7 +107,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Initialize or reconfigure MultiplayerManager when userProfile changes
+  // Initialize or reconfigure MultiplayerManager
   useEffect(() => {
     if (!userProfile) return;
 
@@ -129,6 +133,14 @@ function App() {
           originLat,
           originLng
         );
+      }
+      setRemotePlayersList(Array.from(mgr.remotePlayers.values()));
+    };
+
+    mgr.onPlayerStateChange = (id, remoteIsMuted, remoteIsSpeaking) => {
+      const threeLayer = canvasRef.current?.getThreeLayer() || (window as any).__threeLayer;
+      if (threeLayer?.remotePlayerManager) {
+        threeLayer.remotePlayerManager.updatePlayerState(id, remoteIsMuted, remoteIsSpeaking);
       }
       setRemotePlayersList(Array.from(mgr.remotePlayers.values()));
     };
@@ -163,16 +175,19 @@ function App() {
   }, [userProfile?.id]);
 
   const handleOnboardingComplete = (res: OnboardingResult) => {
-    const profile: LocalUserProfile = {
-      id: 'kerala_' + Math.random().toString(36).substring(2, 9),
+    const updatedProfile: LocalUserProfile = {
+      id: userProfile.id,
       name: res.name,
       district: res.district,
     };
     try {
       localStorage.removeItem('kerala_3d_user_profile');
     } catch (_) {}
-    setUserProfile(profile);
+    setUserProfile(updatedProfile);
     setIsOnboardingOpen(false);
+
+    // Update profile in multiplayer manager without dropping WebRTC connections
+    multiplayerRef.current?.updateProfile(res.name, res.district);
 
     // Spawn at detected GPS coordinates or district center!
     setCurrentLocation({

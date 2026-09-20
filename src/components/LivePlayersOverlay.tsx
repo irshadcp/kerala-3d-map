@@ -51,7 +51,8 @@ export const LivePlayersOverlay: React.FC<LivePlayersOverlayProps> = ({
       {/* Top Floating Live Counter Badge */}
       <button
         onClick={() => setIsOpen(true)}
-        className="glass-pill px-3 py-1.5 flex items-center gap-2 shadow-md hover:bg-white/95 transition-all cursor-pointer pointer-events-auto border border-emerald-200"
+        className={`glass-pill px-3 py-1.5 flex items-center gap-2 shadow-md hover:bg-white/95 transition-all cursor-pointer pointer-events-auto border
+          ${remotePlayers.length > 0 ? 'bg-emerald-50/95 border-emerald-400 shadow-emerald-500/20 ring-2 ring-emerald-300/60' : 'border-emerald-200'}`}
         title="ക്ലിക്ക് ചെയ്ത് ലൈവ് കളിക്കാരെ കാണുക (View Live Players)"
       >
         <span className="relative flex h-2.5 w-2.5">
@@ -61,6 +62,11 @@ export const LivePlayersOverlay: React.FC<LivePlayersOverlayProps> = ({
         <div className="flex items-center gap-1.5 text-xs font-black text-gray-800">
           <Users size={13} className="text-emerald-600" />
           <span>{totalCount} {totalCount === 1 ? 'Player' : 'Players'} Live</span>
+          {remotePlayers.length > 0 && (
+            <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-black rounded-full shadow-sm ml-0.5 animate-pulse">
+              Fly To 🚀
+            </span>
+          )}
         </div>
       </button>
 

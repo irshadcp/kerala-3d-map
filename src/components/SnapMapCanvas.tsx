@@ -668,7 +668,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             el.addEventListener('click', (ev) => {
               ev.stopPropagation();
               if (onSelectPlayer) {
-                onSelectPlayer(player);
+                const latest = (marker as any)?.__playerData || player;
+                onSelectPlayer(latest);
               }
             });
 
@@ -676,8 +677,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               .setLngLat([player.lng, player.lat])
               .addTo(mapInst);
 
+            (marker as any).__playerData = player;
             remoteMarkersRef.current.set(player.id, marker);
           } else {
+            (marker as any).__playerData = player;
             marker.setLngLat([player.lng, player.lat]);
             const el = marker.getElement();
             const nameEl = el.querySelector('.p-name');
