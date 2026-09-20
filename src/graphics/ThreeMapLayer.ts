@@ -3,8 +3,13 @@ import maplibregl from 'maplibre-gl';
 import { GeoCoords } from '../core/geoCoords';
 import { SnapTreeGenerator } from './TreeGenerator';
 
+import { SpatialObstacleMap } from './SpatialObstacleMap';
+import { PetrolStationManager } from './PetrolStationManager';
+import { BusStopManager } from './BusStopManager';
+import { PlaygroundManager } from './PlaygroundManager';
+
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
-  public id = 'three-layer';
+  public id = '3d-model-layer';
   public type: 'custom' = 'custom';
   public renderingMode: '3d' = '3d';
 
@@ -12,6 +17,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public camera!: THREE.Camera;
   public scene!: THREE.Scene;
   public renderer!: THREE.WebGLRenderer;
+
+  private obstacleMap = new SpatialObstacleMap();
+  private petrolStationManager!: PetrolStationManager;
+  private busStopManager!: BusStopManager;
+  private playgroundManager!: PlaygroundManager;
 
   private originLat: number;
   private originLng: number;
@@ -139,7 +149,50 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     this.scene.add(this.playerAvatarGroup);
 
+    this.petrolStationManager = new PetrolStationManager(this.scene);
+    this.busStopManager = new BusStopManager(this.scene);
+    this.playgroundManager = new PlaygroundManager(this.scene);
+
     this.updateModelTransform(this.originLat, this.originLng);
+    
+    // Automatically rebuild obstacles and re-evaluate trees whenever vector tiles load or camera settles
+    const reloadObstaclesAndRegenerate = () => {
+      const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
+      if (refreshed) {
+        // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
+        this.petrolStationManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 2. Place roadside bus stops in free spaces & register footprints in obstacleMap
+        this.busStopManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 3. Place neighborhood sports playgrounds in free spaces away from highway junctions
+        this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng);
+
+        // 4. Regenerate trees - will strictly avoid buildings, roads, water, fuel stations, bus stops, AND playgrounds!
+        for (const group of this.loadedChunks.values()) {
+          this.scene.remove(group);
+          group.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              mesh.geometry?.dispose();
+            }
+          });
+        }
+        this.loadedChunks.clear();
+
+        const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+        this.updateChunks(local.x, local.z);
+      }
+    };
+
+    map.on('idle', reloadObstaclesAndRegenerate);
+    map.on('moveend', reloadObstaclesAndRegenerate);
+    map.on('sourcedata', (e) => {
+      if (e.sourceId === 'openmaptiles' && e.isSourceLoaded) {
+        reloadObstaclesAndRegenerate();
+      }
+    });
+
     this.updatePlayerPosition(this.playerLat, this.playerLng);
   }
 
@@ -163,6 +216,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.playerLat = lat;
     this.playerLng = lng;
     this.updateModelTransform(lat, lng);
+
+    this.petrolStationManager?.clear();
+    this.busStopManager?.clear();
+    this.playgroundManager?.clear();
 
     for (const group of this.loadedChunks.values()) {
       this.scene.remove(group);
@@ -192,8 +249,15 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   }
 
   private updateChunks(playerX: number, playerZ: number) {
+    // Only generate trees once obstacle map has vector tile data!
+    if (!this.obstacleMap.isReady) {
+      this.obstacleMap.update(this.map, this.originLat, this.originLng);
+      if (!this.obstacleMap.isReady) return;
+    }
+
     const playerChunkX = Math.floor(playerX / this.CHUNK_SIZE);
     const playerChunkZ = Math.floor(playerZ / this.CHUNK_SIZE);
+
     const chunkRadius = Math.ceil(this.LOAD_RADIUS / this.CHUNK_SIZE);
 
     const activeChunks = new Set<string>();
@@ -216,7 +280,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
               chunkX,
               chunkZ,
               this.CHUNK_SIZE,
-              this.scene
+              this.scene,
+              this.obstacleMap
             );
             this.scene.add(chunkGroup);
             this.loadedChunks.set(key, chunkGroup);

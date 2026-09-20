@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SpatialObstacleMap } from './SpatialObstacleMap';
 
 // Simple seeded random generator
 function seededRandom(seed: number) {
@@ -11,7 +12,8 @@ export class SnapTreeGenerator {
     chunkX: number,
     chunkZ: number,
     chunkSize: number,
-    _scene: THREE.Scene
+    _scene: THREE.Scene,
+    obstacleMap: SpatialObstacleMap
   ): THREE.Group {
     const group = new THREE.Group();
     group.name = `chunk_${chunkX}_${chunkZ}`;
@@ -55,10 +57,19 @@ export class SnapTreeGenerator {
 
     const dummy = new THREE.Object3D();
 
+
+
     for (let i = 0; i < treeCount; i++) {
       const seed = chunkX * 1000 + chunkZ * 100 + i;
       const rx = chunkX * chunkSize - chunkSize / 2 + seededRandom(seed) * chunkSize;
       const rz = chunkZ * chunkSize - chunkSize / 2 + seededRandom(seed + 1) * chunkSize;
+
+      // --- COLLISION DETECTION ---
+      // 4.5m clearance ensures canopy (radius 2.4-3.6m) does not overlap building walls or road curbs
+      if (obstacleMap.isBlocked(rx, rz, 4.5)) {
+        continue;
+      }
+      // ---------------------------
 
       const isLarge = seededRandom(seed + 2) > 0.6;
       const col = seededRandom(seed + 3) > 0.5 ? color1 : color2;

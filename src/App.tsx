@@ -20,7 +20,10 @@ import {
   RotateCw,
   RotateCcw,
   Compass,
-  Globe
+  Globe,
+  Fuel,
+  Bus,
+  Trophy
 } from 'lucide-react';
 import './styles/theme.css';
 
@@ -219,6 +222,84 @@ function App() {
           >
             <MapPin size={13} className="text-emerald-500" />
             <span>Visited</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const pumps = (window as any).__pumps;
+              if (pumps && pumps.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__pumpIdx || 0) % pumps.length;
+                  (window as any).__pumpIdx = nextIdx + 1;
+                  const targetPump = pumps[nextIdx];
+                  map.flyTo({
+                    center: [targetPump.lng, targetPump.lat],
+                    zoom: 18.2,
+                    pitch: 58,
+                    bearing: 45,
+                    duration: 1400,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-emerald-600 cursor-pointer"
+            title="Jump to Nearest Petrol Pump"
+          >
+            <Fuel size={13} className="text-emerald-600" />
+            <span>Petrol Pump</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const stops = (window as any).__busStops;
+              if (stops && stops.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__busIdx || 0) % stops.length;
+                  (window as any).__busIdx = nextIdx + 1;
+                  const targetStop = stops[nextIdx];
+                  map.flyTo({
+                    center: [targetStop.lng, targetStop.lat],
+                    zoom: 18.5,
+                    pitch: 58,
+                    bearing: 30,
+                    duration: 1200,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-sky-600 cursor-pointer"
+            title="Jump to Nearest Bus Stop"
+          >
+            <Bus size={13} className="text-sky-600" />
+            <span>Bus Stop</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const grounds = (window as any).__playgrounds;
+              if (grounds && grounds.length > 0) {
+                const map = (window as any).__map;
+                if (map) {
+                  const nextIdx = ((window as any).__groundIdx || 0) % grounds.length;
+                  (window as any).__groundIdx = nextIdx + 1;
+                  const targetGround = grounds[nextIdx];
+                  map.flyTo({
+                    center: [targetGround.lng, targetGround.lat],
+                    zoom: 17.8,
+                    pitch: 52,
+                    bearing: 25,
+                    duration: 1300,
+                  });
+                }
+              }
+            }}
+            className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm text-gray-800 hover:bg-white hover:text-green-600 cursor-pointer"
+            title="Jump to Nearest Playground"
+          >
+            <Trophy size={13} className="text-green-600" />
+            <span>Playground</span>
           </button>
         </div>
       </div>

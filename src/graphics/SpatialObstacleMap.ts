@@ -1,0 +1,519 @@
+import maplibregl from 'maplibre-gl';
+import { GeoCoords } from '../core/geoCoords';
+
+interface Point2D {
+  x: number;
+  z: number;
+}
+
+interface BuildingObstacle {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  rings: Point2D[][]; // outer ring + inner rings
+}
+
+interface RoadObstacle {
+  p1: Point2D;
+  p2: Point2D;
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  buffer: number; // required clearance distance in meters
+}
+
+interface WaterObstacle {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  rings: Point2D[][];
+}
+
+export interface ExtractedRoad {
+  p1: Point2D;
+  p2: Point2D;
+  length: number;
+  angle: number;
+  roadClass: string;
+  buffer: number;
+}
+
+const BUCKET_SIZE = 50; // 50m spatial hash cells
+
+export class SpatialObstacleMap {
+  private buildingBuckets = new Map<string, BuildingObstacle[]>();
+  private roadBuckets = new Map<string, RoadObstacle[]>();
+  private waterBuckets = new Map<string, WaterObstacle[]>();
+  
+  public roads: ExtractedRoad[] = [];
+  public totalBuildings = 0;
+  public totalRoads = 0;
+  public isReady = false;
+
+  private lastLat = 0;
+  private lastLng = 0;
+
+  private getBucketKey(cellX: number, cellZ: number): string {
+    return `${cellX},${cellZ}`;
+  }
+
+  public update(map: maplibregl.Map, originLat: number, originLng: number): boolean {
+    if (!map || !map.isStyleLoaded()) return false;
+
+    // Check if map source is loaded
+    try {
+      if (!map.isSourceLoaded('openmaptiles')) return false;
+    } catch {
+      return false;
+    }
+
+    const dist = GeoCoords.distanceMeters(originLat, originLng, this.lastLat, this.lastLng);
+    // Don't recompute if we haven't moved and we already have obstacles
+    if (dist < 80 && this.isReady && (this.totalBuildings > 0 || this.totalRoads > 0)) {
+      return false;
+    }
+
+    // Query all raw vector tile features from loaded tiles
+    let buildingFeatures: maplibregl.MapGeoJSONFeature[] = [];
+    let roadFeatures: maplibregl.MapGeoJSONFeature[] = [];
+    let waterFeatures: maplibregl.MapGeoJSONFeature[] = [];
+
+    try {
+      buildingFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' });
+      roadFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' });
+      waterFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'water' });
+    } catch {
+      return false;
+    }
+
+    if (buildingFeatures.length === 0 && roadFeatures.length === 0) {
+      return false; // Tiles not ready yet
+    }
+
+    this.buildingBuckets.clear();
+    this.roadBuckets.clear();
+    this.waterBuckets.clear();
+    this.roads = [];
+    this.totalBuildings = buildingFeatures.length;
+    this.totalRoads = roadFeatures.length;
+    this.lastLat = originLat;
+    this.lastLng = originLng;
+
+    // 1. Process Buildings (Polygons & MultiPolygons)
+    for (const feat of buildingFeatures) {
+      if (!feat.geometry) continue;
+      const type = feat.geometry.type;
+      const coords = (feat.geometry as any).coordinates;
+      if (!coords) continue;
+
+      if (type === 'Polygon') {
+        this.addBuildingPolygon(coords, originLat, originLng);
+      } else if (type === 'MultiPolygon') {
+        for (const poly of coords) {
+          this.addBuildingPolygon(poly, originLat, originLng);
+        }
+      }
+    }
+
+    // 2. Process Roads (LineStrings & MultiLineStrings)
+    for (const feat of roadFeatures) {
+      if (!feat.geometry) continue;
+      const type = feat.geometry.type;
+      const coords = (feat.geometry as any).coordinates;
+      if (!coords) continue;
+
+      const roadClass = feat.properties?.class || 'minor';
+      // Buffer width in meters from road centerline
+      let buffer = 7; // default for minor/residential
+      if (roadClass === 'motorway' || roadClass === 'trunk') {
+        buffer = 18; // Highway carriageways + green medians/verges
+      } else if (roadClass === 'primary') {
+        buffer = 14;
+      } else if (roadClass === 'secondary' || roadClass === 'tertiary') {
+        buffer = 10;
+      } else if (roadClass === 'service' || roadClass === 'track' || roadClass === 'path') {
+        buffer = 5;
+      }
+
+      if (type === 'LineString') {
+        this.addRoadLine(coords, buffer, roadClass, originLat, originLng);
+      } else if (type === 'MultiLineString') {
+        for (const line of coords) {
+          this.addRoadLine(line, buffer, roadClass, originLat, originLng);
+        }
+      }
+    }
+
+    // 3. Process Water (Polygons & MultiPolygons)
+    for (const feat of waterFeatures) {
+      if (!feat.geometry) continue;
+      const type = feat.geometry.type;
+      const coords = (feat.geometry as any).coordinates;
+      if (!coords) continue;
+
+      if (type === 'Polygon') {
+        this.addWaterPolygon(coords, originLat, originLng);
+      } else if (type === 'MultiPolygon') {
+        for (const poly of coords) {
+          this.addWaterPolygon(poly, originLat, originLng);
+        }
+      }
+    }
+
+    this.isReady = true;
+    return true; // Successfully refreshed
+  }
+
+  private addBuildingPolygon(ringsGeo: number[][][], originLat: number, originLng: number) {
+    if (!ringsGeo || ringsGeo.length === 0) return;
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const rings: Point2D[][] = [];
+
+    for (const ring of ringsGeo) {
+      const convertedRing: Point2D[] = [];
+      for (const pt of ring) {
+        const p = GeoCoords.toLocalMeters(pt[1], pt[0], originLat, originLng);
+        convertedRing.push(p);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      rings.push(convertedRing);
+    }
+
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings };
+
+    // Register into spatial buckets
+    const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
+    const endCellX = Math.floor((maxX + 4) / BUCKET_SIZE);
+    const startCellZ = Math.floor((minZ - 4) / BUCKET_SIZE);
+    const endCellZ = Math.floor((maxZ + 4) / BUCKET_SIZE);
+
+    for (let cx = startCellX; cx <= endCellX; cx++) {
+      for (let cz = startCellZ; cz <= endCellZ; cz++) {
+        const key = this.getBucketKey(cx, cz);
+        let bucket = this.buildingBuckets.get(key);
+        if (!bucket) {
+          bucket = [];
+          this.buildingBuckets.set(key, bucket);
+        }
+        bucket.push(bldg);
+      }
+    }
+  }
+
+  private addRoadLine(pointsGeo: number[][], buffer: number, roadClass: string, originLat: number, originLng: number) {
+    if (!pointsGeo || pointsGeo.length < 2) return;
+
+    for (let i = 0; i < pointsGeo.length - 1; i++) {
+      const p1 = GeoCoords.toLocalMeters(pointsGeo[i][1], pointsGeo[i][0], originLat, originLng);
+      const p2 = GeoCoords.toLocalMeters(pointsGeo[i+1][1], pointsGeo[i+1][0], originLat, originLng);
+
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const length = Math.hypot(dx, dz);
+
+      if (length > 4) {
+        this.roads.push({
+          p1,
+          p2,
+          length,
+          angle: Math.atan2(dx, dz),
+          roadClass,
+          buffer,
+        });
+      }
+
+      const minX = Math.min(p1.x, p2.x) - buffer;
+      const maxX = Math.max(p1.x, p2.x) + buffer;
+      const minZ = Math.min(p1.z, p2.z) - buffer;
+      const maxZ = Math.max(p1.z, p2.z) + buffer;
+
+      const road: RoadObstacle = { p1, p2, minX, maxX, minZ, maxZ, buffer };
+
+      const startCellX = Math.floor(minX / BUCKET_SIZE);
+      const endCellX = Math.floor(maxX / BUCKET_SIZE);
+      const startCellZ = Math.floor(minZ / BUCKET_SIZE);
+      const endCellZ = Math.floor(maxZ / BUCKET_SIZE);
+
+      for (let cx = startCellX; cx <= endCellX; cx++) {
+        for (let cz = startCellZ; cz <= endCellZ; cz++) {
+          const key = this.getBucketKey(cx, cz);
+          let bucket = this.roadBuckets.get(key);
+          if (!bucket) {
+            bucket = [];
+            this.roadBuckets.set(key, bucket);
+          }
+          bucket.push(road);
+        }
+      }
+    }
+  }
+
+  /**
+   * Registers a custom 3D element (e.g. petrol station) as an obstacle
+   * so trees will NEVER spawn on top of or clipping into it.
+   */
+  public registerCustomObstacle(minX: number, maxX: number, minZ: number, maxZ: number) {
+    const rings: Point2D[][] = [[
+      { x: minX, z: minZ },
+      { x: maxX, z: minZ },
+      { x: maxX, z: maxZ },
+      { x: minX, z: maxZ },
+      { x: minX, z: minZ },
+    ]];
+    const bldg: BuildingObstacle = { minX, maxX, minZ, maxZ, rings };
+
+    const startCellX = Math.floor((minX - 4) / BUCKET_SIZE);
+    const endCellX = Math.floor((maxX + 4) / BUCKET_SIZE);
+    const startCellZ = Math.floor((minZ - 4) / BUCKET_SIZE);
+    const endCellZ = Math.floor((maxZ + 4) / BUCKET_SIZE);
+
+    for (let cx = startCellX; cx <= endCellX; cx++) {
+      for (let cz = startCellZ; cz <= endCellZ; cz++) {
+        const key = this.getBucketKey(cx, cz);
+        let bucket = this.buildingBuckets.get(key);
+        if (!bucket) {
+          bucket = [];
+          this.buildingBuckets.set(key, bucket);
+        }
+        bucket.push(bldg);
+      }
+    }
+  }
+
+  /**
+   * Checks if an entire rectangular footprint is 100% free of buildings, roads, and water.
+   */
+  public isFootprintClear(
+    centerX: number,
+    centerZ: number,
+    halfWidth: number,
+    halfDepth: number,
+    margin = 3
+  ): boolean {
+    const points: Point2D[] = [
+      { x: centerX, z: centerZ },
+      { x: centerX - halfWidth - margin, z: centerZ - halfDepth - margin },
+      { x: centerX + halfWidth + margin, z: centerZ - halfDepth - margin },
+      { x: centerX - halfWidth - margin, z: centerZ + halfDepth + margin },
+      { x: centerX + halfWidth + margin, z: centerZ + halfDepth + margin },
+      { x: centerX - halfWidth - margin, z: centerZ },
+      { x: centerX + halfWidth + margin, z: centerZ },
+      { x: centerX, z: centerZ - halfDepth - margin },
+      { x: centerX, z: centerZ + halfDepth + margin },
+    ];
+
+    for (const pt of points) {
+      if (this.isBlocked(pt.x, pt.z, 2)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Specifically tests if a roadside oriented rectangle (e.g. 26x20m petrol station)
+   * is 100% free of buildings, other roads, and water.
+   */
+  public isStationFootprintClear(
+    midX: number,
+    midZ: number,
+    nx: number,
+    nz: number,
+    tx: number,
+    tz: number,
+    centerDist: number,
+    halfWidth = 13,
+    halfDepth = 10,
+    currentRoadP1?: Point2D,
+    currentRoadP2?: Point2D
+  ): boolean {
+    if (!this.isReady) return false;
+
+    // Sample an oriented grid across the footprint
+    for (let u = -halfWidth; u <= halfWidth; u += 6.5) {
+      for (let v = -halfDepth; v <= halfDepth; v += 5) {
+        const px = midX + nx * (centerDist + v) + tx * u;
+        const pz = midZ + nz * (centerDist + v) + tz * u;
+
+        const cellX = Math.floor(px / BUCKET_SIZE);
+        const cellZ = Math.floor(pz / BUCKET_SIZE);
+        const key = this.getBucketKey(cellX, cellZ);
+
+        // 1. Check Buildings
+        const bldgs = this.buildingBuckets.get(key);
+        if (bldgs) {
+          for (const b of bldgs) {
+            if (px < b.minX - 2.5 || px > b.maxX + 2.5 || pz < b.minZ - 2.5 || pz > b.maxZ + 2.5) continue;
+            if (this.pointInPolygon(px, pz, b.rings[0])) return false;
+            for (const ring of b.rings) {
+              for (let i = 0; i < ring.length - 1; i++) {
+                if (this.distToSegment(px, pz, ring[i], ring[i + 1]) < 2.5) return false;
+              }
+            }
+          }
+        }
+
+        // 2. Check Water
+        const waters = this.waterBuckets.get(key);
+        if (waters) {
+          for (const w of waters) {
+            if (px < w.minX || px > w.maxX || pz < w.minZ || pz > w.maxZ) continue;
+            if (this.pointInPolygon(px, pz, w.rings[0])) return false;
+          }
+        }
+
+        // 3. Check Other Roads (excluding current road segment)
+        const roads = this.roadBuckets.get(key);
+        if (roads) {
+          for (const r of roads) {
+            if (currentRoadP1 && Math.hypot(r.p1.x - currentRoadP1.x, r.p1.z - currentRoadP1.z) < 3) continue;
+            if (currentRoadP2 && Math.hypot(r.p2.x - currentRoadP2.x, r.p2.z - currentRoadP2.z) < 3) continue;
+            const dist = this.distToSegment(px, pz, r.p1, r.p2);
+            if (dist < r.buffer + 2) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  private addWaterPolygon(ringsGeo: number[][][], originLat: number, originLng: number) {
+    if (!ringsGeo || ringsGeo.length === 0) return;
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const rings: Point2D[][] = [];
+
+    for (const ring of ringsGeo) {
+      const convertedRing: Point2D[] = [];
+      for (const pt of ring) {
+        const p = GeoCoords.toLocalMeters(pt[1], pt[0], originLat, originLng);
+        convertedRing.push(p);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      rings.push(convertedRing);
+    }
+
+    const water: WaterObstacle = { minX, maxX, minZ, maxZ, rings };
+
+    const startCellX = Math.floor(minX / BUCKET_SIZE);
+    const endCellX = Math.floor(maxX / BUCKET_SIZE);
+    const startCellZ = Math.floor(minZ / BUCKET_SIZE);
+    const endCellZ = Math.floor(maxZ / BUCKET_SIZE);
+
+    for (let cx = startCellX; cx <= endCellX; cx++) {
+      for (let cz = startCellZ; cz <= endCellZ; cz++) {
+        const key = this.getBucketKey(cx, cz);
+        let bucket = this.waterBuckets.get(key);
+        if (!bucket) {
+          bucket = [];
+          this.waterBuckets.set(key, bucket);
+        }
+        bucket.push(water);
+      }
+    }
+  }
+
+  /**
+   * Evaluates if a point is blocked by ANY building, road, road boundary, or water body.
+   * Tree canopy clearance is taken into account.
+   */
+  public isBlocked(px: number, pz: number, clearance = 3.5): boolean {
+    if (!this.isReady) {
+      return true; // Reject trees until obstacle map is fully loaded!
+    }
+
+    const cellX = Math.floor(px / BUCKET_SIZE);
+    const cellZ = Math.floor(pz / BUCKET_SIZE);
+    const key = this.getBucketKey(cellX, cellZ);
+
+    // 1. Check Buildings in this bucket
+    const bldgs = this.buildingBuckets.get(key);
+    if (bldgs) {
+      for (const b of bldgs) {
+        // Fast AABB check with clearance margin
+        if (px < b.minX - clearance || px > b.maxX + clearance || pz < b.minZ - clearance || pz > b.maxZ + clearance) {
+          continue;
+        }
+
+        // Check if point is inside the outer ring
+        if (this.pointInPolygon(px, pz, b.rings[0])) {
+          return true; // Directly inside building!
+        }
+
+        // Check if point is too close to any wall segment
+        for (const ring of b.rings) {
+          for (let i = 0; i < ring.length - 1; i++) {
+            if (this.distToSegment(px, pz, ring[i], ring[i+1]) < clearance) {
+              return true; // Touching or overlapping building wall!
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Check Roads in this bucket
+    const roads = this.roadBuckets.get(key);
+    if (roads) {
+      for (const r of roads) {
+        if (px < r.minX || px > r.maxX || pz < r.minZ || pz > r.maxZ) {
+          continue;
+        }
+        // Check distance to road centerline against required buffer + tree clearance
+        const dist = this.distToSegment(px, pz, r.p1, r.p2);
+        if (dist < r.buffer + clearance) {
+          return true; // Inside road or road boundary/median!
+        }
+      }
+    }
+
+    // 3. Check Water in this bucket
+    const waters = this.waterBuckets.get(key);
+    if (waters) {
+      for (const w of waters) {
+        if (px < w.minX - clearance || px > w.maxX + clearance || pz < w.minZ - clearance || pz > w.maxZ + clearance) {
+          continue;
+        }
+        if (this.pointInPolygon(px, pz, w.rings[0])) {
+          return true; // Inside lake, sea, river, pond!
+        }
+      }
+    }
+
+    return false; // Space is completely clear!
+  }
+
+  private pointInPolygon(px: number, pz: number, ring: Point2D[]): boolean {
+    if (!ring || ring.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i].x, zi = ring[i].z;
+      const xj = ring[j].x, zj = ring[j].z;
+      const intersect = ((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  private distToSegment(px: number, pz: number, p1: Point2D, p2: Point2D): number {
+    const dx = p2.x - p1.x;
+    const dz = p2.z - p1.z;
+    const lenSq = dx * dx + dz * dz;
+    if (lenSq === 0) return Math.hypot(px - p1.x, pz - p1.z);
+    let t = ((px - p1.x) * dx + (pz - p1.z) * dz) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const projX = p1.x + t * dx;
+    const projZ = p1.z + t * dz;
+    return Math.hypot(px - projX, pz - projZ);
+  }
+}
