@@ -2,8 +2,20 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { LocationPreset } from '../config/gameConfig';
 import ThreeMapLayer from '../graphics/ThreeMapLayer';
+import { RemotePlayerData } from '../graphics/RemotePlayerManager';
+import { LocalUserProfile } from '../network/MultiplayerManager';
 
 export type WidenLevel = '2x' | '5x' | '10x';
+
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; lookAhead: number; label: string; desc: string }> = {
   '2x': { zoom: 20.6, pitch: 68, lookAhead: 4.0, label: '2x', desc: 'Wide 3D View' },
@@ -53,16 +65,20 @@ interface SnapMapCanvasProps {
   currentLocation: LocationPreset;
   onPlayerMove?: (lat: number, lng: number, heading?: number, isWalking?: boolean) => void;
   resetTrigger: number;
+  remotePlayers?: RemotePlayerData[];
+  localPlayer?: LocalUserProfile | null;
+  onSelectPlayer?: (player: RemotePlayerData) => void;
 }
 
 export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
-  ({ currentLocation, onPlayerMove, resetTrigger }, ref) => {
+  ({ currentLocation, onPlayerMove, resetTrigger, remotePlayers, localPlayer, onSelectPlayer }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const threeLayer = useRef<ThreeMapLayer | null>(null);
     const is3DRef = useRef<boolean>(true);
     const isRotateModeRef = useRef<boolean>(false);
     const isManualInteractingRef = useRef<boolean>(false);
+    const isTeleportingRef = useRef<boolean>(false);
     const widenLevelRef = useRef<WidenLevel>('2x');
     const playerCoordsRef = useRef<{ lat: number; lng: number }>({
       lat: currentLocation.lat,
@@ -155,22 +171,36 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       },
       teleportToLocation: (lat: number, lng: number) => {
         if (!map.current || !threeLayer.current) return;
+        isTeleportingRef.current = true;
         playerCoordsRef.current = { lat, lng };
+
         is3DRef.current = true;
         threeLayer.current.set3DMode(true);
         threeLayer.current.setOrigin(lat, lng);
         threeLayer.current.updatePlayerPosition(lat, lng, true);
 
-        const zoom = WIDEN_CONFIG[widenLevelRef.current].zoom;
-        const pitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
+        const zoom = 18.2;
+        const targetPitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
         const bearing = map.current.getBearing();
         const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current);
 
         map.current.flyTo({
           center: targetCenter,
           zoom,
-          pitch,
-          duration: 1400,
+          pitch: targetPitch,
+          duration: 1200,
+          essential: true,
+        });
+
+        map.current.once('moveend', () => {
+          isTeleportingRef.current = false;
+          if (map.current) {
+            map.current.setPitch(targetPitch);
+          }
+          if (threeLayer.current) {
+            threeLayer.current.set3DMode(true);
+            threeLayer.current.updatePlayerPosition(lat, lng, true);
+          }
         });
       },
       moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => {
@@ -337,7 +367,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           maxPitch: 85,
           minPitch: 0,
           maxZoom: 24,
-          minZoom: 10,
+          minZoom: 6, // Allows full view of entire Kerala state and all player pins
           dragRotate: true,
           pitchWithRotate: true,
           touchZoomRotate: true,
@@ -382,7 +412,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         // Dynamic Snapchat-style 2D/3D zoom transition engine
         // When zoomed out (< 16.2), auto-ease pitch to 0 and switch to flat 2D mode for zero lag and zero heat!
         const checkZoomAndMode = () => {
-          if (!map.current) return;
+          if (!map.current || isTeleportingRef.current) return;
           const currentZoom = map.current.getZoom();
           const isCloseEnoughFor3D = currentZoom >= 16.2;
 
@@ -481,8 +511,133 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       };
     }, []);
 
+    // -------------------------------------------------------------------------
+    // Snapchat-Style 2D Player Pins on Map (Zoomed Out Pinpoint View)
+    // -------------------------------------------------------------------------
+    const remoteMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+    const localMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+    // Sync remote players 2D map pins
+    useEffect(() => {
+      const mapInst = map.current;
+      if (!mapInst) return;
+
+      const activePeerIds = new Set<string>();
+
+      if (remotePlayers && remotePlayers.length > 0) {
+        for (const player of remotePlayers) {
+          if (!player.lat || !player.lng || isNaN(player.lat) || isNaN(player.lng)) continue;
+          activePeerIds.add(player.id);
+
+          let marker = remoteMarkersRef.current.get(player.id);
+          if (!marker) {
+            const el = document.createElement('div');
+            el.className = 'snap-player-marker';
+            el.style.cursor = 'pointer';
+            el.style.pointerEvents = 'auto';
+
+            el.innerHTML = `
+              <div style="display: flex; flex-direction: column; align-items: center; user-select: none; transform: translateY(-4px); transition: transform 0.2s ease;">
+                <!-- Name & District Floating Overhead Card -->
+                <div style="background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border: 1.5px solid #059669; border-radius: 9999px; padding: 3px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                  <span class="p-name" style="font-weight: 900; font-size: 11px; color: #111827; white-space: nowrap;">${escapeHtml(player.name)}</span>
+                  <span class="p-district" style="background: #d1fae5; color: #065f46; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; white-space: nowrap;">${escapeHtml(player.district)}</span>
+                </div>
+                <!-- Stem -->
+                <div style="width: 2px; height: 5px; background: #059669;"></div>
+                <!-- Avatar Circular Beacon Pin -->
+                <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+                  <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(14, 165, 233, 0.4); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                  <div style="width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #0284c7, #4f46e5); border: 2px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 13px;">
+                    ${escapeHtml(player.name.charAt(0).toUpperCase())}
+                  </div>
+                  <div style="position: absolute; bottom: -3px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #4f46e5;"></div>
+                </div>
+              </div>
+            `;
+
+            el.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              if (onSelectPlayer) {
+                onSelectPlayer(player);
+              }
+            });
+
+            marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+              .setLngLat([player.lng, player.lat])
+              .addTo(mapInst);
+
+            remoteMarkersRef.current.set(player.id, marker);
+          } else {
+            marker.setLngLat([player.lng, player.lat]);
+            const nameEl = marker.getElement().querySelector('.p-name');
+            if (nameEl && nameEl.textContent !== player.name) {
+              nameEl.textContent = player.name;
+            }
+            const distEl = marker.getElement().querySelector('.p-district');
+            if (distEl && distEl.textContent !== player.district) {
+              distEl.textContent = player.district;
+            }
+          }
+        }
+      }
+
+      // Cleanup disconnected peers
+      for (const [id, marker] of remoteMarkersRef.current) {
+        if (!activePeerIds.has(id)) {
+          marker.remove();
+          remoteMarkersRef.current.delete(id);
+        }
+      }
+    }, [remotePlayers, onSelectPlayer]);
+
+    // Sync local player 2D pin on map
+    useEffect(() => {
+      const mapInst = map.current;
+      if (!mapInst || !localPlayer) {
+        if (localMarkerRef.current) {
+          localMarkerRef.current.remove();
+          localMarkerRef.current = null;
+        }
+        return;
+      }
+
+      const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
+      const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
+
+      if (!localMarkerRef.current) {
+        const el = document.createElement('div');
+        el.className = 'snap-local-marker';
+        el.style.pointerEvents = 'none';
+
+        el.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; user-select: none; transform: translateY(-4px);">
+            <div style="background: #059669; border: 1.5px solid #ffffff; border-radius: 9999px; padding: 3px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+              <span style="font-weight: 900; font-size: 11px; color: #ffffff; white-space: nowrap;">${escapeHtml(localPlayer.name)}</span>
+              <span style="background: #064e3b; color: #a7f3d0; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; white-space: nowrap;">നിങ്ങൾ (You)</span>
+            </div>
+            <div style="width: 2px; height: 5px; background: #059669;"></div>
+            <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+              <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(5, 150, 105, 0.4); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+              <div style="width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); border: 2px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">
+                😎
+              </div>
+              <div style="position: absolute; bottom: -3px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #059669;"></div>
+            </div>
+          </div>
+        `;
+
+        localMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+          .setLngLat([pLng, pLat])
+          .addTo(mapInst);
+      } else {
+        localMarkerRef.current.setLngLat([pLng, pLat]);
+      }
+    }, [localPlayer, currentLocation]);
+
     // Handle location preset changes
     useEffect(() => {
+      if (isTeleportingRef.current) return;
       if (map.current && threeLayer.current) {
         playerCoordsRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
         const zoom = WIDEN_CONFIG[widenLevelRef.current].zoom;

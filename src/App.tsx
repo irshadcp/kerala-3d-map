@@ -245,6 +245,34 @@ function App() {
     }
   };
 
+  const handleFlyToPlayer = (lat: number, lng: number, name: string) => {
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+
+    // Spawn ~1.5m offset next to the remote player so they stand side-by-side
+    const spawnLat = lat + 0.000015;
+    const spawnLng = lng + 0.000015;
+
+    // 1. Teleport 3D character, chunks, and camera
+    canvasRef.current?.teleportToLocation(spawnLat, spawnLng);
+
+    // 2. Update currentLocation state in App
+    setCurrentLocation({
+      id: 'player_nav_' + Date.now(),
+      name: `${name}-ന്റെ അടുത്ത്`,
+      subname: 'Kerala, India',
+      lat: spawnLat,
+      lng: spawnLng,
+      zoom: 18.2,
+      pitch: 75,
+      bearing: 0,
+      weather: 'Sunny',
+      temp: '28°C',
+    });
+
+    // 3. Immediately notify all peers across WebRTC of new coordinates
+    multiplayerRef.current?.updateLocalTransform(spawnLat, spawnLng, 0, false);
+  };
+
   return (
     <div className="w-full h-full relative overflow-hidden bg-[#e4f3de] select-none">
       {/* 3D Map Viewport */}
@@ -253,6 +281,11 @@ function App() {
         currentLocation={currentLocation}
         resetTrigger={resetTrigger}
         onPlayerMove={handlePlayerMove}
+        remotePlayers={remotePlayersList}
+        localPlayer={userProfile}
+        onSelectPlayer={(player) => {
+          handleFlyToPlayer(player.lat, player.lng, player.name);
+        }}
       />
 
       {/* Welcome Onboarding Modal for Name & Kerala District (Auto GPS Spawn) */}
@@ -273,10 +306,10 @@ function App() {
         {/* Row 1: Profile Avatar & Live Players, Location Info, Voice Controls & Search */}
         <div className="flex items-center justify-between w-full pointer-events-auto gap-2">
           {/* Left: Profile Bitmoji & Live Players Count Pill */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <div
               onClick={() => setIsOnboardingOpen(true)}
-              className="w-10 h-10 rounded-full bg-white shadow-md border-2 border-white flex items-center justify-center text-xl cursor-pointer hover:scale-105 transition-transform"
+              className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md flex items-center justify-center text-lg cursor-pointer hover:scale-105 transition-transform"
               title={userProfile ? `${userProfile.name} (${userProfile.district}) — ക്ലിക്ക് ചെയ്ത് പ്രൊഫൈൽ മാറ്റാം` : 'Set Profile'}
             >
               {userProfile ? '😎' : '👤'}
@@ -295,33 +328,7 @@ function App() {
                   : null
               }
               remotePlayers={remotePlayersList}
-              onFlyToPlayer={(lat, lng, name) => {
-                if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
-
-                // Spawn slightly offset (~1.5m) next to the remote player
-                const spawnLat = lat + 0.000015;
-                const spawnLng = lng + 0.000015;
-
-                // 1. Teleport 3D character, chunks, and camera
-                canvasRef.current?.teleportToLocation(spawnLat, spawnLng);
-
-                // 2. Update currentLocation state in App
-                setCurrentLocation({
-                  id: 'player_nav_' + Date.now(),
-                  name: `${name}-ന്റെ അടുത്ത്`,
-                  subname: 'Kerala, India',
-                  lat: spawnLat,
-                  lng: spawnLng,
-                  zoom: 18.2,
-                  pitch: 75,
-                  bearing: 0,
-                  weather: 'Sunny',
-                  temp: '28°C',
-                });
-
-                // 3. Immediately notify all peers across WebRTC of new coordinates
-                multiplayerRef.current?.updateLocalTransform(spawnLat, spawnLng, 0, false);
-              }}
+              onFlyToPlayer={handleFlyToPlayer}
             />
           </div>
 
