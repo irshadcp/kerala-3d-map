@@ -7,13 +7,13 @@ export type PerspectiveMode = 'tpp' | 'fpp';
 export type WidenLevel = '1x' | '2x' | '5x' | '10x';
 
 export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; label: string; desc: string }> = {
-  '1x': { zoom: 18.5, pitch: 78, label: '1x', desc: 'Close Chase' },
-  '2x': { zoom: 17.6, pitch: 72, label: '2x', desc: 'Wide TPP' },
-  '5x': { zoom: 16.2, pitch: 60, label: '5x', desc: 'High Drone' },
-  '10x': { zoom: 14.8, pitch: 45, label: '10x', desc: 'Tactical Overview' },
+  '1x': { zoom: 19.3, pitch: 80, label: '1x', desc: 'Close Behind Character' },
+  '2x': { zoom: 18.2, pitch: 74, label: '2x', desc: 'Wide TPP' },
+  '5x': { zoom: 16.6, pitch: 60, label: '5x', desc: 'High Drone' },
+  '10x': { zoom: 15.0, pitch: 48, label: '10x', desc: 'Tactical Overview' },
 };
 
-export const FPP_CONFIG = { zoom: 19.5, pitch: 83, label: 'FPP', desc: 'First Person' };
+export const FPP_CONFIG = { zoom: 19.8, pitch: 84, label: 'FPP', desc: 'First Person' };
 
 export interface SnapMapCanvasRef {
   toggle3D: () => boolean;
@@ -46,7 +46,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     const isRotateModeRef = useRef<boolean>(false);
     const isManualInteractingRef = useRef<boolean>(false);
     const perspectiveRef = useRef<PerspectiveMode>('tpp');
-    const widenLevelRef = useRef<WidenLevel>('2x');
+    const widenLevelRef = useRef<WidenLevel>('1x');
     const playerCoordsRef = useRef<{ lat: number; lng: number }>({
       lat: currentLocation.lat,
       lng: currentLocation.lng,

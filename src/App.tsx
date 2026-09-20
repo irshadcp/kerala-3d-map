@@ -58,7 +58,7 @@ function App() {
   const [isRotateMode, setIsRotateMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
   const [perspective, setPerspective] = useState<PerspectiveMode>('tpp');
-  const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
+  const [widenLevel, setWidenLevel] = useState<WidenLevel>('1x');
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
 
@@ -662,6 +662,16 @@ function App() {
         </button>
       </div>
 
+      {/* Floating Gamer Camera & Perspective Controls (Right Side, styled like rotation buttons) */}
+      <div className="absolute right-2.5 bottom-24 sm:bottom-28 z-20 flex flex-col items-center pointer-events-auto">
+        <GamerCameraControls
+          perspective={perspective}
+          widenLevel={widenLevel}
+          onPerspectiveChange={handlePerspectiveChange}
+          onWidenChange={handleWidenChange}
+        />
+      </div>
+
       {/* Floating Virtual Joystick for Mobile & Desktop */}
       <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto">
         <VirtualJoystick
@@ -674,16 +684,6 @@ function App() {
 
       {/* Bottom Snapchat Bar */}
       <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none flex flex-col items-center pb-2">
-        {/* Gamer Camera Controls: TPP / FPP & 1x / 2x / 5x / 10x */}
-        <div className="pointer-events-auto mb-2">
-          <GamerCameraControls
-            perspective={perspective}
-            widenLevel={widenLevel}
-            onPerspectiveChange={handlePerspectiveChange}
-            onWidenChange={handleWidenChange}
-          />
-        </div>
-
         {/* Rotate Mode notification if active */}
         {isRotateMode && (
           <div className="pointer-events-auto mb-2">

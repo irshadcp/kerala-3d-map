@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Eye, User, Layers } from 'lucide-react';
+import { Eye, User } from 'lucide-react';
 import { PerspectiveMode, WidenLevel } from './SnapMapCanvas';
 
 interface GamerCameraControlsProps {
@@ -43,68 +43,55 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [perspective, onPerspectiveChange, onWidenChange]);
 
-  const widenOptions: { level: WidenLevel; title: string; subtitle: string }[] = [
-    { level: '1x', title: '1x', subtitle: 'Close' },
-    { level: '2x', title: '2x', subtitle: 'Wide' },
-    { level: '5x', title: '5x', subtitle: 'Drone' },
-    { level: '10x', title: '10x', subtitle: 'Max' },
+  const widenOptions: { level: WidenLevel; title: string; desc: string }[] = [
+    { level: '1x', title: '1x', desc: 'Close Behind Character' },
+    { level: '2x', title: '2x', desc: 'Wide TPP' },
+    { level: '5x', title: '5x', desc: 'Drone Overview' },
+    { level: '10x', title: '10x', desc: 'Max Tactical View' },
   ];
 
   return (
-    <div className="flex items-center gap-2 select-none pointer-events-auto">
-      {/* 1. TPP / FPP Perspective Switcher */}
-      <div className="flex items-center p-1 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-white/25 shadow-2xl">
-        <button
-          onClick={() => onPerspectiveChange('tpp')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all duration-200 ${
-            perspective === 'tpp'
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 scale-105'
-              : 'text-gray-300 hover:text-white hover:bg-white/10'
+    <div className="flex flex-col items-center gap-1.5 sm:gap-2 select-none pointer-events-auto">
+      {/* 1. TPP / FPP Toggle Pill (styled like the 3D toggle button on the right rail) */}
+      <button
+        onClick={() => onPerspectiveChange(perspective === 'tpp' ? 'fpp' : 'tpp')}
+        className="glass-pill-button p-1 flex items-center gap-1 text-[11px] sm:text-xs font-black shadow-lg cursor-pointer"
+        title="Toggle TPP (Third-Person) / FPP (First-Person) (Hot key: V)"
+      >
+        <span
+          className={`px-1.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all ${
+            perspective === 'tpp' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
           }`}
-          title="Third-Person Perspective (Hot key: V)"
         >
-          <User size={13} className={perspective === 'tpp' ? 'text-white' : 'text-gray-400'} />
-          <span>TPP</span>
-        </button>
-
-        <button
-          onClick={() => onPerspectiveChange('fpp')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all duration-200 ${
-            perspective === 'fpp'
-              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 scale-105'
-              : 'text-gray-300 hover:text-white hover:bg-white/10'
+          <User size={10} />
+          TPP
+        </span>
+        <span
+          className={`px-1.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all ${
+            perspective === 'fpp' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
           }`}
-          title="First-Person Perspective (Hot key: V)"
         >
-          <Eye size={13} className={perspective === 'fpp' ? 'text-white' : 'text-gray-400'} />
-          <span>FPP</span>
-        </button>
-      </div>
+          <Eye size={10} />
+          FPP
+        </span>
+      </button>
 
-      {/* 2. Screen Widenings: 1x, 2x, 5x, 10x */}
-      <div className="flex items-center p-1 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-white/25 shadow-2xl">
-        <div className="hidden sm:flex items-center px-2 text-[10px] uppercase font-black tracking-widest text-emerald-400/90 gap-1 border-r border-white/15 mr-1">
-          <Layers size={11} />
-          <span>FOV</span>
-        </div>
-
+      {/* 2. Screen Widenings (1x, 2x, 5x, 10x) - Styled as round glass buttons like rotation buttons */}
+      <div className="flex flex-col items-center gap-1 sm:gap-1.5">
         {widenOptions.map((opt) => {
           const isActive = perspective === 'tpp' && widenLevel === opt.level;
           return (
             <button
               key={opt.level}
               onClick={() => onWidenChange(opt.level)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 flex flex-col items-center leading-none ${
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-[11px] sm:text-xs font-black shadow-lg transition-all ${
                 isActive
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/40 scale-105'
-                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+                  ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-white ring-2 ring-emerald-300 shadow-emerald-500/30 scale-105 z-10'
+                  : 'text-gray-700 hover:text-emerald-700 hover:bg-white'
               }`}
-              title={`${opt.title} View (${opt.subtitle})`}
+              title={`${opt.title} View — ${opt.desc}`}
             >
               <span>{opt.title}</span>
-              <span className={`text-[8px] font-medium tracking-tight mt-0.5 ${isActive ? 'text-emerald-100' : 'text-gray-400'}`}>
-                {opt.subtitle}
-              </span>
             </button>
           );
         })}
