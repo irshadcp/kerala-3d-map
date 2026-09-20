@@ -9,6 +9,8 @@ export interface SnapMapCanvasRef {
   rotateBy: (degrees: number) => void;
   resetRotation: () => void;
   toggleRotateMode: () => boolean;
+  moveInDirection: (dirX: number, dirZ: number, isMoving: boolean) => void;
+  getCameraBearing: () => number;
   is3D: boolean;
   isRotateMode: boolean;
 }
@@ -68,6 +70,27 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       toggleRotateMode: () => {
         isRotateModeRef.current = !isRotateModeRef.current;
         return isRotateModeRef.current;
+      },
+      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean) => {
+        if (!threeLayer.current) return;
+        if (isMoving) {
+          const delta = 0.018; // smooth step
+          threeLayer.current.moveInDirection(dirX, dirZ, delta);
+          const pLat = threeLayer.current.playerLat;
+          const pLng = threeLayer.current.playerLng;
+          playerCoordsRef.current = { lat: pLat, lng: pLng };
+
+          // Smoothly pan camera to follow character
+          if (map.current) {
+            map.current.panTo([pLng, pLat], { duration: 120, easing: (t) => t });
+          }
+          if (onPlayerMove) {
+            onPlayerMove(pLat, pLng);
+          }
+        }
+      },
+      getCameraBearing: () => {
+        return map.current ? map.current.getBearing() : 0;
       },
       get is3D() {
         return is3DRef.current;

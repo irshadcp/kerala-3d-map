@@ -13,6 +13,7 @@ import { KeralaHighlandManager } from './KeralaHighlandManager';
 import { KeralaUrbanManager } from './KeralaUrbanManager';
 import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
+import { RealisticCharacter } from './RealisticCharacter';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -37,8 +38,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   private originLat: number;
   private originLng: number;
-  private playerLat: number;
-  private playerLng: number;
+  public playerLat: number;
+  public playerLng: number;
 
   private modelTransform = {
     translateX: 0,
@@ -50,8 +51,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     scale: 1,
   };
 
-  private playerAvatarGroup!: THREE.Group;
-  private avatarMesh!: THREE.Mesh;
+  public playerAvatarGroup!: THREE.Group;
+  public character!: RealisticCharacter;
+  public currentPos = new THREE.Vector2(0, 0);
+  public targetPos = new THREE.Vector2(0, 0);
+  public isWalking = false;
+  private lastFrameTime = performance.now();
+  private lastChunkCheckX = 0;
+  private lastChunkCheckZ = 0;
   private loadedChunks = new Map<string, THREE.Group>();
   private readonly CHUNK_SIZE = 150;
   private readonly LOAD_RADIUS = 450;
@@ -94,70 +101,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     topSunLight.position.set(50, 300, 50);
     this.scene.add(topSunLight);
 
-    // Snapchat Bitmoji-style avatar pin
+    // Grounded Realistic 3D Human Character (Deleted old floating pin badge)
     this.playerAvatarGroup = new THREE.Group();
-
-    // 1. Outer ground ripple / aura ring
-    const auraGeo = new THREE.RingGeometry(3.5, 4.2, 32);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x00a8ff,
-      transparent: true,
-      opacity: 0.45,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    auraMesh.rotation.x = -Math.PI / 2;
-    auraMesh.position.y = 0.12;
-    this.playerAvatarGroup.add(auraMesh);
-
-    // 2. Soft ground shadow
-    const shadowGeo = new THREE.CircleGeometry(3.2, 24);
-    const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x112211,
-      transparent: true,
-      opacity: 0.3,
-      depthWrite: false,
-    });
-    const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-    shadowMesh.rotation.x = -Math.PI / 2;
-    shadowMesh.position.y = 0.08;
-    this.playerAvatarGroup.add(shadowMesh);
-
-    // 3. Cute 3D Bitmoji Pin: Floating White Circle Badge with blue center & pin point
-    const pinBadge = new THREE.Group();
-    pinBadge.position.y = 7.5;
-
-    // White badge border
-    const whiteDiscGeo = new THREE.CylinderGeometry(3.2, 3.2, 0.6, 24);
-    const whiteDiscMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const whiteDisc = new THREE.Mesh(whiteDiscGeo, whiteDiscMat);
-    whiteDisc.rotation.x = Math.PI / 2;
-    pinBadge.add(whiteDisc);
-
-    // Blue inner avatar face disc
-    const innerDiscGeo = new THREE.CylinderGeometry(2.6, 2.6, 0.65, 24);
-    const innerDiscMat = new THREE.MeshLambertMaterial({ color: 0x0099ff });
-    const innerDisc = new THREE.Mesh(innerDiscGeo, innerDiscMat);
-    innerDisc.rotation.x = Math.PI / 2;
-    pinBadge.add(innerDisc);
-
-    // Cute small sphere (avatar head icon)
-    const headGeo = new THREE.SphereGeometry(1.2, 16, 16);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xffe0bd });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 0.3, 0.4);
-    pinBadge.add(head);
-
-    // Small dark sunglasses / hair
-    const hairGeo = new THREE.SphereGeometry(1.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-    const hairMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-    const hair = new THREE.Mesh(hairGeo, hairMat);
-    hair.position.set(0, 0.35, 0.4);
-    pinBadge.add(hair);
-
-    this.avatarMesh = pinBadge as unknown as THREE.Mesh;
-    this.playerAvatarGroup.add(pinBadge);
+    this.character = new RealisticCharacter();
+    this.playerAvatarGroup.add(this.character.group);
 
     this.scene.add(this.playerAvatarGroup);
 
@@ -249,13 +196,52 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     // MapLibre GPU fill-extrusion handles all buildings globally with zero JS overhead
   }
 
-  public updatePlayerPosition(lat: number, lng: number) {
-    this.playerLat = lat;
-    this.playerLng = lng;
-    if (this.playerAvatarGroup) {
-      const local = GeoCoords.toLocalMeters(lat, lng, this.originLat, this.originLng);
-      this.playerAvatarGroup.position.set(local.x, 0, local.z);
-      this.updateChunks(local.x, local.z);
+  public updatePlayerPosition(lat: number, lng: number, immediate = false) {
+    const local = GeoCoords.toLocalMeters(lat, lng, this.originLat, this.originLng);
+    this.targetPos.set(local.x, local.z);
+
+    if (immediate || this.currentPos.distanceTo(this.targetPos) > 300) {
+      this.currentPos.set(local.x, local.z);
+      this.playerLat = lat;
+      this.playerLng = lng;
+      if (this.playerAvatarGroup) {
+        this.playerAvatarGroup.position.set(local.x, 0, local.z);
+        this.updateChunks(local.x, local.z);
+      }
+    }
+  }
+
+  public moveInDirection(dirX: number, dirZ: number, delta: number) {
+    if (!this.character || !this.playerAvatarGroup) return;
+
+    const moveSpeed = 10.5; // 10.5 m/s jog speed
+    const stepX = dirX * moveSpeed * delta;
+    const stepZ = dirZ * moveSpeed * delta;
+
+    const nextX = this.currentPos.x + stepX;
+    const nextZ = this.currentPos.y + stepZ;
+
+    // Zero Building Collision: Ensure character cannot walk through solid building walls
+    if (!this.obstacleMap.isBuildingCollision(nextX, nextZ, 0.45, 0.45, 0)) {
+      this.currentPos.x = nextX;
+      this.currentPos.y = nextZ;
+    }
+    this.targetPos.copy(this.currentPos);
+
+    this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
+
+    const heading = Math.atan2(dirX, dirZ);
+    this.character.setHeading(heading);
+    this.character.update(delta, true, 1.3);
+
+    const coords = GeoCoords.toLatLng(this.currentPos.x, this.currentPos.y, this.originLat, this.originLng);
+    this.playerLat = coords.lat;
+    this.playerLng = coords.lng;
+
+    if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
+      this.lastChunkCheckX = this.currentPos.x;
+      this.lastChunkCheckZ = this.currentPos.y;
+      this.updateChunks(this.currentPos.x, this.currentPos.y);
     }
   }
 
@@ -364,10 +350,48 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public render(_gl: any, matrix: any) {
     if (!this.scene || !this.camera) return;
 
-    // Gentle floating bounce on avatar pin
-    if (this.avatarMesh) {
-      const time = performance.now() * 0.003;
-      this.avatarMesh.position.y = 7.5 + Math.sin(time) * 0.6;
+    const now = performance.now();
+    const delta = Math.min(0.05, (now - this.lastFrameTime) / 1000);
+    this.lastFrameTime = now;
+
+    // Smooth character walking & procedural animation
+    if (this.character && this.playerAvatarGroup) {
+      const dist = this.currentPos.distanceTo(this.targetPos);
+      if (dist > 0.25) {
+        this.isWalking = true;
+        const dirX = (this.targetPos.x - this.currentPos.x) / dist;
+        const dirZ = (this.targetPos.y - this.currentPos.y) / dist;
+        const moveStep = Math.min(dist, 9.5 * delta);
+
+        const nextX = this.currentPos.x + dirX * moveStep;
+        const nextZ = this.currentPos.y + dirZ * moveStep;
+
+        if (!this.obstacleMap.isBuildingCollision(nextX, nextZ, 0.45, 0.45, 0)) {
+          this.currentPos.x = nextX;
+          this.currentPos.y = nextZ;
+        } else {
+          this.targetPos.copy(this.currentPos);
+        }
+
+        this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
+
+        const heading = Math.atan2(dirX, dirZ);
+        this.character.setHeading(heading);
+        this.character.update(delta, true, 1.25);
+
+        const coords = GeoCoords.toLatLng(this.currentPos.x, this.currentPos.y, this.originLat, this.originLng);
+        this.playerLat = coords.lat;
+        this.playerLng = coords.lng;
+
+        if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
+          this.lastChunkCheckX = this.currentPos.x;
+          this.lastChunkCheckZ = this.currentPos.y;
+          this.updateChunks(this.currentPos.x, this.currentPos.y);
+        }
+      } else {
+        this.isWalking = false;
+        this.character.update(delta, false, 1.0);
+      }
     }
 
     // Sync MapLibre Camera to Three.js Projection

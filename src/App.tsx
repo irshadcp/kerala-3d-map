@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import SnapMapCanvas, { SnapMapCanvasRef } from './components/SnapMapCanvas';
 import { LocationPreset } from './config/gameConfig';
 import GlobalSearchModal from './components/GlobalSearchModal';
+import VirtualJoystick from './components/VirtualJoystick';
 import { GeocodingResult } from './services/geocodingService';
 import {
   MapPin,
@@ -576,12 +577,12 @@ function App() {
         </div>
       </div>
 
-      {/* Floating Right Side Controls (3D, Rotation, Layers, Recenter) */}
-      <div className="absolute right-3 top-28 z-20 flex flex-col items-center gap-2 pointer-events-auto">
+      {/* Floating Right Side Controls (Compact on Mobile & Desktop) */}
+      <div className="absolute right-2.5 top-24 sm:top-28 z-20 flex flex-col items-center gap-1.5 sm:gap-2 pointer-events-auto">
         {/* 3D / 2D Toggle Button */}
         <button
           onClick={handleToggle3D}
-          className="glass-pill-button px-3 py-2 flex items-center gap-1.5 text-xs font-black shadow-lg"
+          className="glass-pill-button px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-center gap-1 text-[11px] sm:text-xs font-black shadow-lg"
           title="Toggle 3D View"
         >
           <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${is3DMode ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
@@ -592,58 +593,68 @@ function App() {
         {/* 3D Orbit Rotate Mode Toggle */}
         <button
           onClick={handleToggleRotateMode}
-          className={`w-10 h-10 rounded-full glass-pill-button flex items-center justify-center shadow-lg transition-all ${
+          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center shadow-lg transition-all ${
             isRotateMode ? 'bg-blue-500 text-white ring-2 ring-blue-300' : 'text-gray-700'
           }`}
           title={isRotateMode ? 'Rotate Mode: Drag screen to orbit 360°' : 'Click to enable 360° Rotate Mode'}
         >
-          <RotateCw size={17} className={isRotateMode ? 'animate-spin' : ''} />
+          <RotateCw size={15} className={isRotateMode ? 'animate-spin' : ''} />
         </button>
 
         {/* Rotate Left 45° */}
         <button
           onClick={handleRotateLeft}
-          className="w-10 h-10 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
           title="Rotate Left 45°"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={15} />
         </button>
 
         {/* Rotate Right 45° */}
         <button
           onClick={handleRotateRight}
-          className="w-10 h-10 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
           title="Rotate Right 45°"
         >
-          <RotateCw size={16} />
+          <RotateCw size={15} />
         </button>
 
         {/* Compass / Reset to North */}
         <button
           onClick={handleResetRotation}
-          className="w-10 h-10 rounded-full glass-pill-button flex items-center justify-center text-red-500 shadow-lg"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-red-500 shadow-lg"
           title="Reset to North"
         >
-          <Compass size={18} />
+          <Compass size={16} />
         </button>
 
         {/* Global Places / Search Button */}
         <button
           onClick={() => setIsSearchOpen(true)}
-          className="w-10 h-10 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-gray-700 shadow-lg hover:text-blue-600"
           title="Search Global Location"
         >
-          <Globe size={17} />
+          <Globe size={15} />
         </button>
 
         {/* Recenter to Avatar */}
         <button
           onClick={handleRecenter}
-          className="w-10 h-10 rounded-full glass-pill-button flex items-center justify-center text-blue-600 shadow-lg"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full glass-pill-button flex items-center justify-center text-blue-600 shadow-lg"
           title="Recenter on Avatar"
         >
-          <Navigation size={17} className="fill-blue-500" />
+          <Navigation size={15} className="fill-blue-500" />
         </button>
+      </div>
+
+      {/* Floating Virtual Joystick for Mobile & Desktop */}
+      <div className="absolute bottom-20 left-3 sm:left-5 z-30 pointer-events-auto">
+        <VirtualJoystick
+          onMove={(dirX, dirZ, isMoving) => {
+            canvasRef.current?.moveInDirection(dirX, dirZ, isMoving);
+          }}
+          getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
+        />
       </div>
 
       {/* Bottom Snapchat Bar */}
@@ -664,7 +675,7 @@ function App() {
               className="glass-pill px-4 py-2 shadow-lg flex items-center gap-2 hover:bg-white transition-all"
             >
               <UserPlus size={15} className="text-blue-500" />
-              <span className="text-xs font-bold text-gray-800">Tap road to walk</span>
+              <span className="text-xs font-bold text-gray-800">🚶 Tap / Joystick to walk</span>
             </button>
           )}
         </div>
