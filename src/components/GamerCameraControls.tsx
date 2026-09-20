@@ -25,17 +25,21 @@ export const GamerCameraControls: React.FC<GamerCameraControlsProps> = ({
       } else if (e.code === 'Digit4' || e.code === 'Digit0' || e.code === 'Numpad4' || e.code === 'Numpad0') {
         e.preventDefault();
         onWidenChange('10x');
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        onWidenChange(widenLevel === 'map' ? '2x' : 'map');
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onWidenChange]);
+  }, [onWidenChange, widenLevel]);
 
   const widenOptions: { level: WidenLevel; title: string; desc: string }[] = [
     { level: '2x', title: '2x', desc: 'Wide 3D View' },
     { level: '5x', title: '5x', desc: 'Drone Overview' },
     { level: '10x', title: '10x', desc: 'Max Tactical View' },
+    { level: 'map', title: '🗺️', desc: '2D Tactical Map' },
   ];
 
   return (

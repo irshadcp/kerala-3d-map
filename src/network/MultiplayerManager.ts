@@ -49,6 +49,7 @@ export class MultiplayerManager {
   public onPlayerCountChange?: (count: number) => void;
   public onRemoteStream?: (peerId: string, stream: MediaStream, audioCtx: AudioContext) => void;
   public onMuteStateChange?: (muted: boolean) => void;
+  public onLocalSpeakingChange?: (speaking: boolean) => void;
 
   private heartbeatTimer: number | null = null;
   private lastTransformSent = 0;
@@ -430,6 +431,9 @@ export class MultiplayerManager {
           try {
             this.sendState({ isSpeaking: false });
           } catch (_) {}
+          if (this.onLocalSpeakingChange) {
+            this.onLocalSpeakingChange(false);
+          }
         }
         return;
       }
@@ -447,6 +451,9 @@ export class MultiplayerManager {
         try {
           this.sendState({ isSpeaking: speaking });
         } catch (_) {}
+        if (this.onLocalSpeakingChange) {
+          this.onLocalSpeakingChange(speaking);
+        }
       }
     }, 150);
   }

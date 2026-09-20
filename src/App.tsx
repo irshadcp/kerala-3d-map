@@ -71,6 +71,7 @@ function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(true);
   const [remotePlayersList, setRemotePlayersList] = useState<RemotePlayerData[]>([]);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const multiplayerRef = useRef<MultiplayerManager | null>(null);
 
   const canvasRef = useRef<SnapMapCanvasRef>(null);
@@ -149,6 +150,10 @@ function App() {
 
     mgr.onMuteStateChange = (muted) => {
       setIsMuted(muted);
+    };
+
+    mgr.onLocalSpeakingChange = (speaking) => {
+      setIsSpeaking(speaking);
     };
 
     return () => {
@@ -322,6 +327,8 @@ function App() {
         onPlayerMove={handlePlayerMove}
         remotePlayers={remotePlayersList}
         localPlayer={userProfile}
+        isMuted={isMuted}
+        isSpeaking={isSpeaking}
         onSelectPlayer={(player) => {
           handleFlyToPlayer(player.lat, player.lng, player.name);
         }}

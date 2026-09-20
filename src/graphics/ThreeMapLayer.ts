@@ -17,6 +17,7 @@ import { RealisticCharacter } from './RealisticCharacter';
 import { PlayerVehicle } from './PlayerVehicle';
 import { BuildingFacadeManager } from './BuildingFacadeManager';
 import { RemotePlayerManager } from './RemotePlayerManager';
+import { PlayerNameplate } from './PlayerNameplate';
 
 export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public id = '3d-model-layer';
@@ -64,6 +65,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   public playerAvatarGroup!: THREE.Group;
   public character!: RealisticCharacter;
+  public localNameplate!: PlayerNameplate;
   public currentPos = new THREE.Vector2(0, 0);
   public targetPos = new THREE.Vector2(0, 0);
   public isWalking = false;
@@ -120,6 +122,16 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.playerAvatarGroup = new THREE.Group();
     this.character = new RealisticCharacter(1.35);
     this.playerAvatarGroup.add(this.character.group);
+
+    // Overhead PUBG-style floating nameplate & blinking microphone badge
+    this.localNameplate = new PlayerNameplate({
+      name: 'നിങ്ങൾ (You)',
+      district: 'Kerala',
+      isMuted: false,
+      isSpeaking: false,
+      isLocal: true,
+    });
+    this.playerAvatarGroup.add(this.localNameplate.sprite);
 
     // Parked / Driveable Kerala Vehicle (Auto-Rickshaw beside player)
     this.playerVehicle = new PlayerVehicle('auto', 1.0);
@@ -377,6 +389,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.playerVehicle.setHeading(this.character.getHeading());
       // Player is inside the auto: hide outer walking character model
       this.character.group.visible = false;
+      this.localNameplate?.setDriving(true);
     } else {
       this.playerVehicle.setPosition(2.4, 0, 0);
       this.playerVehicle.setHeading(0);
@@ -384,6 +397,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.character.group.visible = true;
       this.character.group.position.set(0, 0, 0);
       this.character.group.scale.set(1.5, 1.5, 1.5);
+      this.localNameplate?.setDriving(false);
     }
     return this.isDrivingState;
   }
@@ -667,6 +681,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.character.update(delta, this.isWalking, this.isDrivingState ? 0.5 : 1.25);
     }
 
+    // Overhead PUBG-style floating nameplate & blinking microphone
+    if (this.localNameplate) {
+      this.localNameplate.tick(now);
+      this.localNameplate.setDriving(this.isDrivingState);
+    }
+
     if (this.playerVehicle) {
       if (this.isDrivingState) {
         this.playerVehicle.setPosition(0, 0, 0);
@@ -720,12 +740,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.renderer.render(this.scene, this.camera);
 
     // Thermal & Battery Optimization:
-    // Only repaint continuous 60 FPS if character is actively moving or nearby peer (< 80m) is moving
+    // Only repaint continuous 60 FPS if character is actively moving, local user is speaking, or nearby peer (< 80m) is moving
     const hasNearbyMovingPeer =
       this.remotePlayerManager &&
       this.remotePlayerManager.hasMovingNearbyPlayer(this.currentPos.x, this.currentPos.y, 80);
 
-    if (this.isWalking || hasNearbyMovingPeer) {
+    const isLocalSpeaking = this.localNameplate && (this.localNameplate as any).isSpeaking;
+
+    if (this.isWalking || hasNearbyMovingPeer || isLocalSpeaking) {
       this.map.triggerRepaint();
     } else if (this.is3DActive) {
       // In 3D mode when idle, throttle gentle animation tick (~15 FPS) for breathing
@@ -776,6 +798,20 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.loadedChunks.clear();
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
+      this.map?.triggerRepaint();
+    }
+  }
+
+  public setLocalProfile(name: string, district: string) {
+    if (this.localNameplate) {
+      this.localNameplate.update({ name, district, isLocal: true });
+      this.map?.triggerRepaint();
+    }
+  }
+
+  public setLocalVoiceState(isMuted: boolean, isSpeaking: boolean) {
+    if (this.localNameplate) {
+      this.localNameplate.update({ isMuted, isSpeaking });
       this.map?.triggerRepaint();
     }
   }

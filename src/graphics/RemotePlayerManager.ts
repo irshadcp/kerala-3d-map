@@ -251,6 +251,10 @@ export class RemotePlayerManager {
       // Animate walking / idle breathing
       player.character.update(delta, player.data.isWalking, 1.25);
 
+      // Animate overhead PUBG-style nameplate & speaking pulse
+      player.nameplate.tick(now);
+      player.nameplate.setDriving(player.data.isDriving ?? false);
+
       // Vehicle & Driving Posture
       if (player.data.isDriving) {
         player.character.group.visible = false; // Inside auto
