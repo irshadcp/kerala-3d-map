@@ -621,4 +621,255 @@ export class KeralaVillageGenerator {
     bridge.scale.set(1.4, 1.4, 1.4);
     return bridge;
   }
+
+  /**
+   * 10. Kerala Arecanut Grove (കവുങ്ങിൻ തോട്ടം / അടക്ക മരങ്ങൾ)
+   * Cluster of tall, ultra-slender arecanut palms with segmented ringed trunks,
+   * compact crowns, and hanging orange/green arecanut bunches (അടക്കക്കുലകൾ).
+   */
+  public static createArecanutGroveModel(): THREE.Group {
+    const grove = new THREE.Group();
+    grove.name = 'kerala_arecanut_grove';
+
+    const trunkMat1 = new THREE.MeshLambertMaterial({ color: 0x64748b }); // Slate grey-green trunk
+    const ringMat = new THREE.MeshLambertMaterial({ color: 0x334155 }); // Dark ringed node
+    const nutMat = new THREE.MeshLambertMaterial({ color: 0xd97706 }); // Golden-orange arecanut bunch
+    const frondMat = new THREE.MeshLambertMaterial({ color: 0x15803d, side: THREE.DoubleSide });
+    const soilMat = new THREE.MeshLambertMaterial({ color: 0x3f2010 });
+
+    // Soil Bed
+    const bedGeo = new THREE.CylinderGeometry(3.5, 3.8, 0.15, 12);
+    const bed = new THREE.Mesh(bedGeo, soilMat);
+    bed.position.y = 0.075;
+    grove.add(bed);
+
+    // 4 Arecanut Palms in the grove
+    const palmOffsets = [
+      { x: -1.2, z: -0.9, h: 7.2, lean: 0.04 },
+      { x: 1.4, z: -0.8, h: 7.8, lean: -0.05 },
+      { x: -0.8, z: 1.3, h: 6.8, lean: 0.03 },
+      { x: 1.1, z: 1.1, h: 7.5, lean: -0.04 },
+    ];
+
+    for (const po of palmOffsets) {
+      const palmGroup = new THREE.Group();
+      palmGroup.position.set(po.x, 0, po.z);
+
+      // Slender tall trunk
+      const trunkGeo = new THREE.CylinderGeometry(0.12, 0.16, po.h, 7);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat1);
+      trunk.position.y = po.h / 2;
+      trunk.rotation.z = po.lean;
+      palmGroup.add(trunk);
+
+      // Segmented trunk rings (കണ്ണികൾ)
+      for (let y = 1.0; y < po.h - 0.5; y += 0.8) {
+        const ringGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.05, 7);
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.set(0, y, 0);
+        palmGroup.add(ring);
+      }
+
+      // Crown group at top of trunk
+      const crown = new THREE.Group();
+      crown.position.set(po.lean * (po.h / 2), po.h, 0);
+
+      // Hanging Arecanut Bunches (അടക്കക്കുലകൾ)
+      for (const na of [-0.6, 0.6]) {
+        const nutClusterGeo = new THREE.SphereGeometry(0.3, 6, 6);
+        nutClusterGeo.scale(0.8, 1.2, 0.8);
+        const nutCluster = new THREE.Mesh(nutClusterGeo, nutMat);
+        nutCluster.position.set(Math.sin(na) * 0.25, -0.35, Math.cos(na) * 0.25);
+        crown.add(nutCluster);
+      }
+
+      // Compact radiating fronds (6 fronds)
+      for (let f = 0; f < 6; f++) {
+        const fa = (f / 6) * Math.PI * 2;
+        const frondGeo = new THREE.BoxGeometry(0.28, 0.04, 2.2);
+        const frond = new THREE.Mesh(frondGeo, frondMat);
+        frond.rotation.y = fa;
+        frond.rotation.x = 0.55;
+        frond.position.set(Math.sin(fa) * 0.9, -0.15, Math.cos(fa) * 0.9);
+        crown.add(frond);
+      }
+
+      palmGroup.add(crown);
+      grove.add(palmGroup);
+    }
+
+    grove.scale.set(1.4, 1.4, 1.4);
+    return grove;
+  }
+
+  /**
+   * 11. Kerala Banana Plantation Clump (വാഴത്തോട്ടം / കുലവാഴകൾ)
+   * Cluster of lush banana plants with wide arching green leaves,
+   * hanging green banana bunches (വാഴക്കുല), and purple blossoms (വാഴക്കൂമ്പ്).
+   */
+  public static createBananaGroveModel(): THREE.Group {
+    const grove = new THREE.Group();
+    grove.name = 'kerala_banana_grove';
+
+    const stemMat = new THREE.MeshLambertMaterial({ color: 0x84cc16 });
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x16a34a, side: THREE.DoubleSide });
+    const fruitMat = new THREE.MeshLambertMaterial({ color: 0x65a30d }); // Ripe green banana bunch
+    const heartMat = new THREE.MeshLambertMaterial({ color: 0x831843 }); // Deep purple/maroon blossom (വാഴക്കൂമ്പ്)
+    const soilMat = new THREE.MeshLambertMaterial({ color: 0x3f2010 });
+
+    // Raised moist soil mound
+    const moundGeo = new THREE.CylinderGeometry(3.0, 3.4, 0.18, 10);
+    const mound = new THREE.Mesh(moundGeo, soilMat);
+    mound.position.y = 0.09;
+    grove.add(mound);
+
+    const bananaTrees = [
+      { x: 0, z: 0, scale: 1.15, hasBunch: true },
+      { x: -1.3, z: -0.7, scale: 0.95, hasBunch: false },
+      { x: 1.2, z: -0.6, scale: 1.0, hasBunch: true },
+      { x: -0.7, z: 1.2, scale: 0.85, hasBunch: false },
+      { x: 0.9, z: 1.0, scale: 0.9, hasBunch: false },
+    ];
+
+    for (const b of bananaTrees) {
+      const bGroup = new THREE.Group();
+      bGroup.position.set(b.x, 0, b.z);
+
+      const h = 2.4 * b.scale;
+      const stemGeo = new THREE.CylinderGeometry(0.12 * b.scale, 0.16 * b.scale, h, 6);
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.y = h / 2;
+      bGroup.add(stem);
+
+      // Banana Leaves (5 wide broad leaves arching outwards)
+      for (let l = 0; l < 5; l++) {
+        const la = (l / 5) * Math.PI * 2 + (b.x * 2);
+        const leafGeo = new THREE.BoxGeometry(0.42 * b.scale, 0.04, 2.1 * b.scale);
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.position.set(Math.sin(la) * 0.85 * b.scale, h + 0.1, Math.cos(la) * 0.85 * b.scale);
+        leaf.rotation.y = la;
+        leaf.rotation.x = 0.52;
+        bGroup.add(leaf);
+      }
+
+      // Banana Bunch (വാഴക്കുല) & Flower Heart (വാഴക്കൂമ്പ്)
+      if (b.hasBunch) {
+        const bunchGroup = new THREE.Group();
+        bunchGroup.position.set(0.35 * b.scale, h - 0.2, 0);
+
+        // Curving stalk
+        const stalkGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 5);
+        const stalk = new THREE.Mesh(stalkGeo, stemMat);
+        stalk.rotation.z = 0.6;
+        bunchGroup.add(stalk);
+
+        // Tiered bunch of green bananas
+        const bunchGeo = new THREE.CylinderGeometry(0.18 * b.scale, 0.14 * b.scale, 0.6 * b.scale, 8);
+        const bunch = new THREE.Mesh(bunchGeo, fruitMat);
+        bunch.position.set(0.2 * b.scale, -0.3 * b.scale, 0);
+        bunchGroup.add(bunch);
+
+        // Purple banana heart / blossom (വാഴക്കൂമ്പ്)
+        const heartGeo = new THREE.ConeGeometry(0.12 * b.scale, 0.3 * b.scale, 6);
+        const heart = new THREE.Mesh(heartGeo, heartMat);
+        heart.rotation.x = Math.PI;
+        heart.position.set(0.2 * b.scale, -0.65 * b.scale, 0);
+        bunchGroup.add(heart);
+
+        bGroup.add(bunchGroup);
+      }
+
+      grove.add(bGroup);
+    }
+
+    grove.scale.set(1.4, 1.4, 1.4);
+    return grove;
+  }
+
+  /**
+   * 12. Sacred Grove / Miniature Forest Patch (കാവ് / കുറുങ്കാട്)
+   * Protected ancient biodiversity thicket with mossy stone platform (തറ),
+   * carved serpent idol (നാഗത്തറ) / stone lamp, hanging roots, and dense foliage.
+   */
+  public static createSacredGroveModel(): THREE.Group {
+    const grove = new THREE.Group();
+    grove.name = 'kerala_sacred_grove';
+
+    const lateriteMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Weathered laterite stone
+    const idolMat = new THREE.MeshLambertMaterial({ color: 0x334155 }); // Granite idol
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Dark wild trunk
+    const forestCanopyMat1 = new THREE.MeshLambertMaterial({ color: 0x14532d }); // Ancient deep jungle green
+    const forestCanopyMat2 = new THREE.MeshLambertMaterial({ color: 0x166534 });
+    const vineMat = new THREE.MeshLambertMaterial({ color: 0x15803d });
+
+    // Raised Circular Sacred Platform (തറ)
+    const tharaGeo = new THREE.CylinderGeometry(2.4, 2.6, 0.45, 14);
+    const thara = new THREE.Mesh(tharaGeo, lateriteMat);
+    thara.position.y = 0.22;
+    grove.add(thara);
+
+    // Sacred Idol Stone / Serpent Shrine (നാഗത്തറ)
+    const idolGeo = new THREE.BoxGeometry(0.4, 0.7, 0.2);
+    const idol = new THREE.Mesh(idolGeo, idolMat);
+    idol.position.set(0, 0.8, 0);
+    grove.add(idol);
+
+    // Stone Lamp (കൽവിളക്ക്)
+    const lampBaseGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.45, 8);
+    const lampBase = new THREE.Mesh(lampBaseGeo, idolMat);
+    lampBase.position.set(0.8, 0.65, 0.6);
+    grove.add(lampBase);
+
+    // 2 Ancient Canopy Trees with Hanging Aerial Roots (വിഴുതുകൾ)
+    const treeOffsets = [
+      { x: -2.8, z: -1.5, h: 6.5 },
+      { x: 2.2, z: -2.0, h: 7.0 },
+    ];
+
+    for (const to of treeOffsets) {
+      const treeGroup = new THREE.Group();
+      treeGroup.position.set(to.x, 0, to.z);
+
+      const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, to.h, 7);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = to.h / 2;
+      treeGroup.add(trunk);
+
+      // Hanging aerial roots (വിഴുതുകൾ)
+      for (let r = 0; r < 3; r++) {
+        const ra = r * 2.0;
+        const rootGeo = new THREE.CylinderGeometry(0.04, 0.04, to.h * 0.75, 4);
+        const root = new THREE.Mesh(rootGeo, vineMat);
+        root.position.set(Math.sin(ra) * 0.9, to.h * 0.45, Math.cos(ra) * 0.9);
+        treeGroup.add(root);
+      }
+
+      // Dense multi-tier jungle canopy
+      const c1Geo = new THREE.SphereGeometry(3.0, 8, 8);
+      c1Geo.scale(1.2, 0.8, 1.2);
+      const c1 = new THREE.Mesh(c1Geo, forestCanopyMat1);
+      c1.position.y = to.h + 1.2;
+      treeGroup.add(c1);
+
+      const c2Geo = new THREE.SphereGeometry(2.2, 7, 7);
+      const c2 = new THREE.Mesh(c2Geo, forestCanopyMat2);
+      c2.position.set(0.8, to.h + 2.2, 0.5);
+      treeGroup.add(c2);
+
+      grove.add(treeGroup);
+    }
+
+    // Dense wild ferns & undergrowth surrounding shrine
+    for (let u = 0; u < 8; u++) {
+      const ua = (u / 8) * Math.PI * 2;
+      const fernGeo = new THREE.SphereGeometry(0.7, 5, 5);
+      fernGeo.scale(1.2, 0.5, 1.2);
+      const fern = new THREE.Mesh(fernGeo, forestCanopyMat2);
+      fern.position.set(Math.sin(ua) * 3.2, 0.35, Math.cos(ua) * 3.2);
+      grove.add(fern);
+    }
+
+    grove.scale.set(1.4, 1.4, 1.4);
+    return grove;
+  }
 }

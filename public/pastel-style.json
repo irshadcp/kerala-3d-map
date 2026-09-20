@@ -35,6 +35,39 @@
       }
     },
     {
+      "id": "landcover_farmland",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "filter": ["match", ["get", "class"], ["farmland", "farm", "orchard"], true, false],
+      "paint": {
+        "fill-color": "#dcfce7",
+        "fill-opacity": 0.85
+      }
+    },
+    {
+      "id": "landcover_wetland",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "filter": ["match", ["get", "class"], ["wetland", "marsh", "swamp", "mangrove"], true, false],
+      "paint": {
+        "fill-color": "#a7f3d0",
+        "fill-opacity": 0.9
+      }
+    },
+    {
+      "id": "landcover_sand",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "filter": ["match", ["get", "class"], ["sand", "beach"], true, false],
+      "paint": {
+        "fill-color": "#fef08a",
+        "fill-opacity": 0.9
+      }
+    },
+    {
       "id": "water",
       "type": "fill",
       "source": "openmaptiles",

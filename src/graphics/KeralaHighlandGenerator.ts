@@ -139,4 +139,96 @@ export class KeralaHighlandGenerator {
     viewpoint.scale.set(1.35, 1.35, 1.35);
     return viewpoint;
   }
+
+  /**
+   * 4. Laterite Soil Cut & Hillside Cutting (ചെങ്കൽ കുന്നുകൾ / ചെങ്കൽ തട്ടുകൾ)
+   * Terraced cut laterite soil face with red laterite stone blocks,
+   * quarry block textures, and green hillside shrubs on top.
+   */
+  public static createLateriteCutModel(): THREE.Group {
+    const cut = new THREE.Group();
+    cut.name = 'kerala_laterite_cut';
+
+    const redEarthMat = new THREE.MeshLambertMaterial({ color: 0x9a3412 }); // Terracotta-red laterite earth
+    const cutStoneMat = new THREE.MeshLambertMaterial({ color: 0xb45309 }); // Golden-red cut stone
+    const darkStoneMat = new THREE.MeshLambertMaterial({ color: 0x7c2d12 });
+    const shrubMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
+
+    // Tier 1 Base Bank (7m wide x 3.5m deep x 1.4m high)
+    const tier1Geo = new THREE.BoxGeometry(7.0, 1.4, 3.5);
+    const tier1 = new THREE.Mesh(tier1Geo, redEarthMat);
+    tier1.position.set(0, 0.7, 0);
+    cut.add(tier1);
+
+    // Tier 2 Upper Terraced Cutting (5.5m wide x 2.4m deep x 1.6m high)
+    const tier2Geo = new THREE.BoxGeometry(5.5, 1.6, 2.4);
+    const tier2 = new THREE.Mesh(tier2Geo, cutStoneMat);
+    tier2.position.set(0, 2.2, -0.5);
+    cut.add(tier2);
+
+    // Stacked Cut Laterite Blocks (വെട്ടുകല്ല് പാടുകൾ) on the terrace
+    for (let i = 0; i < 6; i++) {
+      const bx = -2.0 + (i % 3) * 1.5;
+      const bz = i >= 3 ? 0.8 : 1.3;
+      const blockGeo = new THREE.BoxGeometry(1.2, 0.45, 0.6);
+      const block = new THREE.Mesh(blockGeo, (i % 2 === 0 ? cutStoneMat : darkStoneMat));
+      block.position.set(bx, 1.62, bz);
+      cut.add(block);
+    }
+
+    // Wild shrubs & grasses on the top ridge
+    for (let s = 0; s < 4; s++) {
+      const sx = -2.0 + s * 1.3;
+      const shrubGeo = new THREE.SphereGeometry(0.7, 6, 6);
+      shrubGeo.scale(1.2, 0.6, 1.2);
+      const shrub = new THREE.Mesh(shrubGeo, shrubMat);
+      shrub.position.set(sx, 3.2, -0.6);
+      cut.add(shrub);
+    }
+
+    cut.scale.set(1.4, 1.4, 1.4);
+    return cut;
+  }
+
+  /**
+   * 5. Western Ghats Rocky Granite Outcrop (കരിങ്കൽ പാറക്കെട്ടുകൾ / മലഞ്ചെരിവുകൾ)
+   * Angular granite boulder crag with crevices and mountain vegetation.
+   */
+  public static createRockyGraniteOutcropModel(): THREE.Group {
+    const outcrop = new THREE.Group();
+    outcrop.name = 'kerala_rocky_outcrop';
+
+    const rockMat1 = new THREE.MeshLambertMaterial({ color: 0x475569 }); // Slate granite
+    const rockMat2 = new THREE.MeshLambertMaterial({ color: 0x334155 }); // Dark weathered rock
+    const grassMat = new THREE.MeshLambertMaterial({ color: 0x65a30d }); // Highland wild tuft
+
+    const boulderConfigs = [
+      { x: 0, y: 1.5, z: 0, sx: 4.5, sy: 3.0, sz: 3.8, rotY: 0.3, mat: rockMat1 },
+      { x: -2.2, y: 1.0, z: 0.8, sx: 3.2, sy: 2.0, sz: 2.8, rotY: -0.4, mat: rockMat2 },
+      { x: 2.4, y: 1.2, z: -0.6, sx: 3.4, sy: 2.4, sz: 2.6, rotY: 0.7, mat: rockMat2 },
+      { x: -0.8, y: 3.2, z: -0.4, sx: 2.8, sy: 1.6, sz: 2.4, rotY: 0.2, mat: rockMat1 },
+    ];
+
+    for (const bc of boulderConfigs) {
+      const geo = new THREE.DodecahedronGeometry(1.0, 1);
+      geo.scale(bc.sx / 2, bc.sy / 2, bc.sz / 2);
+      const mesh = new THREE.Mesh(geo, bc.mat);
+      mesh.position.set(bc.x, bc.y, bc.z);
+      mesh.rotation.set(0.1, bc.rotY, -0.1);
+      outcrop.add(mesh);
+    }
+
+    // Mountain grass & moss tufts in crevices
+    for (let t = 0; t < 5; t++) {
+      const tx = -2.0 + t * 1.0;
+      const tuftGeo = new THREE.SphereGeometry(0.5, 5, 5);
+      tuftGeo.scale(1.4, 0.4, 1.4);
+      const tuft = new THREE.Mesh(tuftGeo, grassMat);
+      tuft.position.set(tx, 0.3, 1.8);
+      outcrop.add(tuft);
+    }
+
+    outcrop.scale.set(1.4, 1.4, 1.4);
+    return outcrop;
+  }
 }

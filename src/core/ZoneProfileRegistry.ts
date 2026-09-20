@@ -31,7 +31,12 @@ export type KeralaAssetType =
   | 'village_house'
   | 'farm_plot'
   | 'village_pond'
-  | 'canal_culvert';
+  | 'canal_culvert'
+  | 'arecanut_grove'
+  | 'banana_grove'
+  | 'sacred_grove'
+  | 'laterite_cut'
+  | 'rocky_outcrop';
 
 export interface ZoneProfile {
   type: KeralaZoneType;
@@ -73,6 +78,11 @@ export interface ZoneProfile {
     farmPlot?: number;
     villagePond?: number;
     canalCulvert?: number;
+    arecanutGrove?: number;
+    bananaGrove?: number;
+    sacredGrove?: number;
+    lateriteCut?: number;
+    rockyOutcrop?: number;
   };
 }
 
@@ -141,6 +151,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'village_house',
       'village_pond',
       'canal_culvert',
+      'arecanut_grove',
+      'banana_grove',
+      'sacred_grove',
+      'laterite_cut',
     ],
     treeProfile: {
       baseDensity: 10,
@@ -163,6 +177,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       villageHouse: 180,
       villagePond: 400,
       canalCulvert: 200,
+      arecanutGrove: 260,
+      bananaGrove: 220,
+      sacredGrove: 600,
+      lateriteCut: 380,
     },
   },
 
@@ -182,6 +200,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'farm_plot',
       'village_pond',
       'canal_culvert',
+      'arecanut_grove',
+      'banana_grove',
+      'sacred_grove',
+      'laterite_cut',
     ],
     treeProfile: {
       baseDensity: 14,
@@ -199,6 +221,10 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       farmPlot: 240,
       villagePond: 360,
       canalCulvert: 180,
+      arecanutGrove: 220,
+      bananaGrove: 180,
+      sacredGrove: 500,
+      lateriteCut: 320,
     },
   },
 
@@ -273,7 +299,15 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
     nameEnglish: 'Paddy (Agricultural Wetlands / പാടം)',
     nameMalayalam: 'പാടശേഖരം (Paddy)',
     description: 'Vast open agricultural plains, mud dikes, irrigation streams',
-    allowedAssets: ['bus_stop', 'chayakada', 'open_well', 'farm_plot', 'canal_culvert'],
+    allowedAssets: [
+      'bus_stop',
+      'chayakada',
+      'open_well',
+      'farm_plot',
+      'canal_culvert',
+      'arecanut_grove',
+      'banana_grove',
+    ],
     treeProfile: {
       baseDensity: 3, // Very low in the field; only on dikes/bunds
       primarySpecies: 'coconut_palm',
@@ -288,6 +322,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       openWell: 400,
       farmPlot: 300,
       canalCulvert: 200,
+      arecanutGrove: 280,
+      bananaGrove: 240,
     },
   },
 
@@ -323,6 +359,9 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'worship_place',
       'farm_plot',
       'canal_culvert',
+      'arecanut_grove',
+      'banana_grove',
+      'laterite_cut',
     ],
     treeProfile: {
       baseDensity: 18,
@@ -338,6 +377,9 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       canalCulvert: 220,
       checkpost: 800,
       worshipPlace: 800,
+      arecanutGrove: 220,
+      bananaGrove: 200,
+      lateriteCut: 300,
     },
   },
 
@@ -354,6 +396,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       'viewpoint',
       'chayakada',
       'worship_place',
+      'rocky_outcrop',
+      'laterite_cut',
     ],
     treeProfile: {
       baseDensity: 14,
@@ -367,6 +411,8 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
       viewpoint: 450,
       checkpost: 600,
       chayakada: 350,
+      rockyOutcrop: 380,
+      lateriteCut: 340,
     },
   },
 
@@ -375,7 +421,7 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
     nameEnglish: 'Forest (Tropical Evergreen Jungle)',
     nameMalayalam: 'വനമേഖല (Forest)',
     description: 'Dense tropical canopy, wildlife reserves, zero human sprawl',
-    allowedAssets: ['forest_checkpost', 'viewpoint'],
+    allowedAssets: ['forest_checkpost', 'viewpoint', 'rocky_outcrop', 'sacred_grove'],
     treeProfile: {
       baseDensity: 24, // Very dense canopy
       primarySpecies: 'tropical_rainforest',
@@ -383,10 +429,12 @@ export const ZONE_PROFILES: Record<KeralaZoneType, ZoneProfile> = {
     },
     spacing: {
       petrolStation: 5000,
-      busStop: 1500,
+      busStop: 1200,
       playground: 5000,
       checkpost: 800,
-      viewpoint: 700,
+      viewpoint: 600,
+      rockyOutcrop: 350,
+      sacredGrove: 450,
     },
   },
 };

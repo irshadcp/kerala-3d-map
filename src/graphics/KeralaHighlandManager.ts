@@ -5,7 +5,7 @@ import { GeoCoords } from '../core/geoCoords';
 import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
 
 export interface PlacedHighlandItemInfo {
-  type: 'tea_bush' | 'forest_checkpost' | 'viewpoint';
+  type: 'tea_bush' | 'forest_checkpost' | 'viewpoint' | 'rocky_outcrop' | 'laterite_cut';
   name: string;
   lat: number;
   lng: number;
@@ -19,6 +19,8 @@ export class KeralaHighlandManager {
   private checkpostPositions: Array<{ x: number; z: number }> = [];
   private viewpointPositions: Array<{ x: number; z: number }> = [];
   private teaPositions: Array<{ x: number; z: number }> = [];
+  private rockyPositions: Array<{ x: number; z: number }> = [];
+  private lateritePositions: Array<{ x: number; z: number }> = [];
 
   public placedItems: PlacedHighlandItemInfo[] = [];
 
@@ -40,6 +42,8 @@ export class KeralaHighlandManager {
     this.checkpostPositions = [];
     this.viewpointPositions = [];
     this.teaPositions = [];
+    this.rockyPositions = [];
+    this.lateritePositions = [];
     this.placedItems = [];
   }
 
@@ -226,6 +230,122 @@ export class KeralaHighlandManager {
                   lng: coords.lng,
                   x: txPos,
                   z: tzPos,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // 4. Western Ghats Rocky Granite Outcrop (കരിങ്കൽ പാറക്കെട്ടുകൾ / മലഞ്ചെരിവുകൾ)
+        const rockDist = road.buffer + 12.0;
+        const rx = midX + nx * rockDist;
+        const rz = midZ + nz * rockDist;
+
+        if (profile.allowedAssets.includes('rocky_outcrop')) {
+          const minRockDist = profile.spacing.rockyOutcrop || 380;
+          const tooCloseRock = this.rockyPositions.some(
+            (pos) => Math.hypot(pos.x - rx, pos.z - rz) < minRockDist
+          );
+
+          if (!tooCloseRock) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                rockDist,
+                6.5,
+                5.0,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(rx, rz, 6.5, 5.0, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(rx, rz, 7.0, 5.5, rotY) &&
+              !obstacleMap.isPointInWater(rx, rz)
+            ) {
+              const key = `rock_${Math.round(rx / 8)}_${Math.round(rz / 8)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(rx - 7.0, rx + 7.0, rz - 6.0, rz + 6.0);
+
+                const model = KeralaHighlandGenerator.createRockyGraniteOutcropModel();
+                model.position.set(rx, 0, rz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.rockyPositions.push({ x: rx, z: rz });
+
+                const coords = GeoCoords.toLatLng(rx, rz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'rocky_outcrop',
+                  name: 'കരിങ്കൽ പാറക്കെട്ടുകൾ (Rocky Granite Outcrop)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: rx,
+                  z: rz,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // 5. Highland Laterite Cutting (ചെങ്കൽ കുന്നുകൾ / തട്ടുകൾ)
+        const lateriteDist = road.buffer + 9.0;
+        const lx = midX + nx * lateriteDist;
+        const lz = midZ + nz * lateriteDist;
+
+        if (profile.allowedAssets.includes('laterite_cut')) {
+          const minLateriteDist = profile.spacing.lateriteCut || 340;
+          const tooCloseLaterite = this.lateritePositions.some(
+            (pos) => Math.hypot(pos.x - lx, pos.z - lz) < minLateriteDist
+          );
+
+          if (!tooCloseLaterite) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                lateriteDist,
+                5.5,
+                3.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(lx, lz, 5.5, 3.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(lx, lz, 6.0, 4.0, rotY) &&
+              !obstacleMap.isPointInWater(lx, lz)
+            ) {
+              const key = `laterite_${Math.round(lx / 6)}_${Math.round(lz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(lx - 5.5, lx + 5.5, lz - 4.0, lz + 4.0);
+
+                const model = KeralaHighlandGenerator.createLateriteCutModel();
+                model.position.set(lx, 0, lz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.lateritePositions.push({ x: lx, z: lz });
+
+                const coords = GeoCoords.toLatLng(lx, lz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'laterite_cut',
+                  name: 'ചെങ്കൽ കുന്നുകൾ / തട്ടുകൾ (Laterite Soil Cutting)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: lx,
+                  z: lz,
                 });
                 itemsPlaced++;
               }

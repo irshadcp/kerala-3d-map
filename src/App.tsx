@@ -343,7 +343,11 @@ function App() {
                   i.type === 'farm_plot' ||
                   i.type === 'village_pond' ||
                   i.type === 'canal_culvert' ||
-                  i.type === 'open_well'
+                  i.type === 'open_well' ||
+                  i.type === 'arecanut_grove' ||
+                  i.type === 'banana_grove' ||
+                  i.type === 'sacred_grove' ||
+                  i.type === 'laterite_cut'
               );
               if (items && items.length > 0) {
                 const map = (window as any).__map;

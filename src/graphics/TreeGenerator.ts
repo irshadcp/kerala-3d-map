@@ -154,6 +154,133 @@ export class SnapTreeGenerator {
     return tree;
   }
 
+  /**
+   * Authentic Kerala Arecanut Palm (കവുങ്ങ് / അടക്ക മരം)
+   * Ultra-slender tall trunk with segmented nodes and hanging arecanut bunches (അടക്കക്കുലകൾ)
+   */
+  private static createArecanutPalmModel(scale = 1.0): THREE.Group {
+    const palm = new THREE.Group();
+    palm.name = 'kerala_arecanut_palm';
+
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
+    const ringMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+    const nutMat = new THREE.MeshLambertMaterial({ color: 0xd97706 });
+    const frondMat = new THREE.MeshLambertMaterial({ color: 0x16a34a, side: THREE.DoubleSide });
+
+    const h = 7.6 * scale;
+    const trunkGeo = new THREE.CylinderGeometry(0.12 * scale, 0.16 * scale, h, 7);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = h / 2;
+    palm.add(trunk);
+
+    // Segmented rings (കണ്ണികൾ)
+    for (let y = 1.0; y < h - 0.5; y += 0.9 * scale) {
+      const ringGeo = new THREE.CylinderGeometry(0.14 * scale, 0.14 * scale, 0.05 * scale, 7);
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = y;
+      palm.add(ring);
+    }
+
+    // Crown
+    const crown = new THREE.Group();
+    crown.position.set(0, h, 0);
+
+    // Arecanut bunches
+    for (const na of [-0.6, 0.6]) {
+      const nutGeo = new THREE.SphereGeometry(0.28 * scale, 6, 6);
+      nutGeo.scale(0.8, 1.2, 0.8);
+      const nut = new THREE.Mesh(nutGeo, nutMat);
+      nut.position.set(Math.sin(na) * 0.22 * scale, -0.35 * scale, Math.cos(na) * 0.22 * scale);
+      crown.add(nut);
+    }
+
+    // Compact fronds
+    for (let f = 0; f < 6; f++) {
+      const fa = (f / 6) * Math.PI * 2;
+      const frondGeo = new THREE.BoxGeometry(0.26 * scale, 0.04 * scale, 2.2 * scale);
+      const frond = new THREE.Mesh(frondGeo, frondMat);
+      frond.rotation.y = fa;
+      frond.rotation.x = 0.55;
+      frond.position.set(Math.sin(fa) * 0.85 * scale, -0.15 * scale, Math.cos(fa) * 0.85 * scale);
+      crown.add(frond);
+    }
+
+    palm.add(crown);
+
+    // Shadow
+    const shadowGeo = new THREE.CircleGeometry(2.0 * scale, 10);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x112200,
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+    });
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.08;
+    palm.add(shadow);
+
+    return palm;
+  }
+
+  /**
+   * Authentic Kerala Tropical Broadleaf Tree (മാവ് / പ്ലാവ് - Mango / Jackfruit)
+   * Dense, rounded evergreen umbrella canopy with thick textured trunk and fruit
+   */
+  private static createTropicalBroadleafModel(col: THREE.Color, scale = 1.0): THREE.Group {
+    const tree = new THREE.Group();
+    tree.name = 'kerala_tropical_broadleaf';
+
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
+    const leafMat1 = new THREE.MeshLambertMaterial({ color: col });
+    const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x14532d });
+    const fruitMat = new THREE.MeshLambertMaterial({ color: 0x65a30d }); // Jackfruit / mango green
+
+    // Gnarly trunk (3.8m tall)
+    const trunkGeo = new THREE.CylinderGeometry(0.35 * scale, 0.55 * scale, 3.8 * scale, 7);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = (3.8 * scale) / 2;
+    tree.add(trunk);
+
+    // Spreading umbrella multi-sphere canopy
+    const c1Geo = new THREE.SphereGeometry(2.8 * scale, 8, 8);
+    c1Geo.scale(1.2, 0.85, 1.2);
+    const c1 = new THREE.Mesh(c1Geo, leafMat1);
+    c1.position.y = 4.2 * scale;
+    tree.add(c1);
+
+    const c2Geo = new THREE.SphereGeometry(2.0 * scale, 7, 7);
+    c2Geo.scale(1.1, 0.8, 1.1);
+    const c2 = new THREE.Mesh(c2Geo, leafMat2);
+    c2.position.set(0.7 * scale, 5.2 * scale, -0.4 * scale);
+    tree.add(c2);
+
+    // Hanging fruits (പ്ലാവിലെ ചക്ക / മാങ്ങ)
+    for (let f = 0; f < 3; f++) {
+      const fa = f * 2.1;
+      const fruitGeo = new THREE.SphereGeometry(0.22 * scale, 6, 6);
+      fruitGeo.scale(0.8, 1.3, 0.8);
+      const fruit = new THREE.Mesh(fruitGeo, fruitMat);
+      fruit.position.set(Math.sin(fa) * 1.2 * scale, 3.2 * scale, Math.cos(fa) * 1.2 * scale);
+      tree.add(fruit);
+    }
+
+    // Shadow
+    const shadowGeo = new THREE.CircleGeometry(3.4 * scale, 12);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x112200,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    });
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.08;
+    tree.add(shadow);
+
+    return tree;
+  }
+
   public static generateTreesForChunk(
     chunkX: number,
     chunkZ: number,
@@ -181,7 +308,8 @@ export class SnapTreeGenerator {
     const countVar = Math.floor(seededRandom(seedBase) * 6);
     const treeCount = Math.max(1, profile.treeProfile.baseDensity + countVar);
 
-    // If Coconut Palm zone (coastal, backwater, rural):
+    // If Coconut Palm zone (coastal, backwater, rural, paddy):
+    // Authentic mixed tropical vegetation: Coconut Palms, Arecanut Palms, and Broadleaf Mango/Jackfruit trees
     if (profile.treeProfile.primarySpecies === 'coconut_palm') {
       const colors = profile.treeProfile.canopyColors.map((c) => new THREE.Color(c));
 
@@ -206,7 +334,18 @@ export class SnapTreeGenerator {
 
         const col = colors[i % colors.length];
         const scale = (0.85 + seededRandom(seed + 2) * 0.35) * 1.35;
-        const palm = this.createCoconutPalmModel(col, scale);
+        const treeTypeRand = seededRandom(seed + 7);
+
+        let model: THREE.Group;
+        if (treeTypeRand < 0.60) {
+          model = this.createCoconutPalmModel(col, scale);
+        } else if (treeTypeRand < 0.82) {
+          model = this.createArecanutPalmModel(scale);
+        } else {
+          model = this.createTropicalBroadleafModel(col, scale);
+        }
+
+        const palm = model;
         palm.position.set(rx, 0, rz);
         palm.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
         group.add(palm);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { KeralaVillageGenerator } from './KeralaVillageGenerator';
+import { KeralaHighlandGenerator } from './KeralaHighlandGenerator';
 import { GeoCoords } from '../core/geoCoords';
 import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
 
@@ -14,7 +15,11 @@ export interface PlacedVillageItemInfo {
     | 'village_house'
     | 'farm_plot'
     | 'village_pond'
-    | 'canal_culvert';
+    | 'canal_culvert'
+    | 'arecanut_grove'
+    | 'banana_grove'
+    | 'sacred_grove'
+    | 'laterite_cut';
   name: string;
   lat: number;
   lng: number;
@@ -33,6 +38,10 @@ export class KeralaVillageManager {
   private farmPositions: Array<{ x: number; z: number }> = [];
   private pondPositions: Array<{ x: number; z: number }> = [];
   private culvertPositions: Array<{ x: number; z: number }> = [];
+  private arecanutPositions: Array<{ x: number; z: number }> = [];
+  private bananaPositions: Array<{ x: number; z: number }> = [];
+  private sacredPositions: Array<{ x: number; z: number }> = [];
+  private lateritePositions: Array<{ x: number; z: number }> = [];
 
   public placedItems: PlacedVillageItemInfo[] = [];
 
@@ -58,6 +67,10 @@ export class KeralaVillageManager {
     this.farmPositions = [];
     this.pondPositions = [];
     this.culvertPositions = [];
+    this.arecanutPositions = [];
+    this.bananaPositions = [];
+    this.sacredPositions = [];
+    this.lateritePositions = [];
     this.placedItems = [];
   }
 
@@ -523,6 +536,250 @@ export class KeralaVillageManager {
                   lng: coords.lng,
                   x: px,
                   z: pz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 8. Arecanut Grove (കവുങ്ങിൻ തോട്ടം / അടക്ക മരങ്ങൾ)
+        // -------------------------------------------------------------
+        const arecanutDist = road.buffer + 9.5;
+        const ax = midX + nx * arecanutDist;
+        const az = midZ + nz * arecanutDist;
+
+        if (profile.allowedAssets.includes('arecanut_grove')) {
+          const minArecanutDist = profile.spacing.arecanutGrove || 220;
+          const tooCloseArecanut = this.arecanutPositions.some(
+            (pos) => Math.hypot(pos.x - ax, pos.z - az) < minArecanutDist
+          );
+
+          if (!tooCloseArecanut) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                arecanutDist,
+                4.5,
+                4.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(ax, az, 4.5, 4.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(ax, az, 5.0, 5.0, rotY) &&
+              !obstacleMap.isPointInWater(ax, az)
+            ) {
+              const key = `arecanut_${Math.round(ax / 6)}_${Math.round(az / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(ax - 5.0, ax + 5.0, az - 5.0, az + 5.0);
+
+                const model = KeralaVillageGenerator.createArecanutGroveModel();
+                model.position.set(ax, 0, az);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.arecanutPositions.push({ x: ax, z: az });
+
+                const coords = GeoCoords.toLatLng(ax, az, originLat, originLng);
+                this.placedItems.push({
+                  type: 'arecanut_grove',
+                  name: 'കവുങ്ങിൻ തോട്ടം (Arecanut Grove)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: ax,
+                  z: az,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 9. Banana Plantation Clump (വാഴത്തോട്ടം / കുലവാഴകൾ)
+        // -------------------------------------------------------------
+        const bananaDist = road.buffer + 10.0;
+        const bx = midX + nx * bananaDist;
+        const bz = midZ + nz * bananaDist;
+
+        if (profile.allowedAssets.includes('banana_grove')) {
+          const minBananaDist = profile.spacing.bananaGrove || 180;
+          const tooCloseBanana = this.bananaPositions.some(
+            (pos) => Math.hypot(pos.x - bx, pos.z - bz) < minBananaDist
+          );
+
+          if (!tooCloseBanana) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                bananaDist,
+                4.5,
+                4.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(bx, bz, 4.5, 4.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(bx, bz, 5.0, 5.0, rotY) &&
+              !obstacleMap.isPointInWater(bx, bz)
+            ) {
+              const key = `banana_${Math.round(bx / 6)}_${Math.round(bz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(bx - 5.0, bx + 5.0, bz - 5.0, bz + 5.0);
+
+                const model = KeralaVillageGenerator.createBananaGroveModel();
+                model.position.set(bx, 0, bz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.bananaPositions.push({ x: bx, z: bz });
+
+                const coords = GeoCoords.toLatLng(bx, bz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'banana_grove',
+                  name: 'വാഴത്തോട്ടം (Banana Plantation Grove)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: bx,
+                  z: bz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 10. Sacred Grove (വിശുദ്ധ കാവ് / കുറുങ്കാട് - Sacred Forest Patch)
+        // -------------------------------------------------------------
+        const sacredDist = road.buffer + 16.5;
+        const sgx = midX + nx * sacredDist;
+        const sgz = midZ + nz * sacredDist;
+
+        if (profile.allowedAssets.includes('sacred_grove')) {
+          const minSacredDist = profile.spacing.sacredGrove || 500;
+          const tooCloseSacred = this.sacredPositions.some(
+            (pos) => Math.hypot(pos.x - sgx, pos.z - sgz) < minSacredDist
+          );
+
+          if (!tooCloseSacred) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                sacredDist,
+                6.5,
+                6.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(sgx, sgz, 6.5, 6.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(sgx, sgz, 7.0, 7.0, rotY) &&
+              !obstacleMap.isPointInWater(sgx, sgz)
+            ) {
+              const key = `sacred_${Math.round(sgx / 8)}_${Math.round(sgz / 8)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(sgx - 7.0, sgx + 7.0, sgz - 7.0, sgz + 7.0);
+
+                const model = KeralaVillageGenerator.createSacredGroveModel();
+                model.position.set(sgx, 0, sgz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.sacredPositions.push({ x: sgx, z: sgz });
+
+                const coords = GeoCoords.toLatLng(sgx, sgz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'sacred_grove',
+                  name: 'വിശുദ്ധ കാവ് / കുറുങ്കാട് (Sacred Grove / Forest Patch)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: sgx,
+                  z: sgz,
+                  roadName: road.roadClass,
+                });
+                itemsPlaced++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // 11. Laterite Soil Cut & Hillside (ചെങ്കൽ കുന്നുകൾ / തട്ടുകൾ)
+        // -------------------------------------------------------------
+        const lateriteDist = road.buffer + 8.5;
+        const lx = midX + nx * lateriteDist;
+        const lz = midZ + nz * lateriteDist;
+
+        if (profile.allowedAssets.includes('laterite_cut')) {
+          const minLateriteDist = profile.spacing.lateriteCut || 320;
+          const tooCloseLaterite = this.lateritePositions.some(
+            (pos) => Math.hypot(pos.x - lx, pos.z - lz) < minLateriteDist
+          );
+
+          if (!tooCloseLaterite) {
+            const rotY = Math.atan2(-nx, -nz);
+            if (
+              obstacleMap.isStationFootprintClear(
+                midX,
+                midZ,
+                nx,
+                nz,
+                tx,
+                tz,
+                lateriteDist,
+                5.5,
+                3.5,
+                road.p1,
+                road.p2
+              ) &&
+              !obstacleMap.isRoadCollision(lx, lz, 5.5, 3.5, rotY, road.p1, road.p2) &&
+              !obstacleMap.isBuildingCollision(lx, lz, 6.0, 4.0, rotY) &&
+              !obstacleMap.isPointInWater(lx, lz)
+            ) {
+              const key = `laterite_${Math.round(lx / 6)}_${Math.round(lz / 6)}`;
+              if (!this.items.has(key)) {
+                obstacleMap.registerCustomObstacle(lx - 5.5, lx + 5.5, lz - 4.0, lz + 4.0);
+
+                const model = KeralaHighlandGenerator.createLateriteCutModel();
+                model.position.set(lx, 0, lz);
+                model.rotation.y = rotY;
+
+                this.scene.add(model);
+                this.items.set(key, model);
+                this.lateritePositions.push({ x: lx, z: lz });
+
+                const coords = GeoCoords.toLatLng(lx, lz, originLat, originLng);
+                this.placedItems.push({
+                  type: 'laterite_cut',
+                  name: 'ചെങ്കൽ കുന്നുകൾ / തട്ടുകൾ (Laterite Soil Cutting)',
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  x: lx,
+                  z: lz,
                   roadName: road.roadClass,
                 });
                 itemsPlaced++;
