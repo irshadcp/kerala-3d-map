@@ -72,7 +72,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private lastChunkCheckZ = 0;
   private loadedChunks = new Map<string, THREE.Group>();
   private readonly CHUNK_SIZE = 150;
-  private readonly LOAD_RADIUS = 180; // 180m radius keeps mobile lightweight and cool
+  public isLowEndMode: boolean = false;
+  private LOAD_RADIUS = 180; // Adaptive: 120m in low-end mode, 180m in high mode
   private lastRegenX = -9999;
   private lastRegenZ = -9999;
 
@@ -99,7 +100,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.renderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: gl as WebGLRenderingContext,
-      antialias: true,
+      antialias: false, // Disabling MSAA resolve eliminates mobile GPU stalls & battery heat
+      powerPreference: 'high-performance',
     });
     this.renderer.autoClear = false;
 
@@ -750,6 +752,30 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.buildingFacadeManager?.update(this.obstacleMap, this.originLat, this.originLng, local.x, local.z);
       this.map?.triggerRepaint();
     } else {
+      this.map?.triggerRepaint();
+    }
+  }
+
+  public setPerformanceMode(isLowEnd: boolean) {
+    if (this.isLowEndMode === isLowEnd) return;
+    this.isLowEndMode = isLowEnd;
+    this.LOAD_RADIUS = isLowEnd ? 120 : 180;
+    SnapTreeGenerator.setLowEndMode(isLowEnd);
+
+    // Refresh chunks with new LOD & radius if 3D is active
+    if (this.is3DActive) {
+      for (const group of this.loadedChunks.values()) {
+        this.threeDGroup.remove(group);
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry?.dispose();
+          }
+        });
+      }
+      this.loadedChunks.clear();
+      const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+      this.updateChunks(local.x, local.z);
       this.map?.triggerRepaint();
     }
   }

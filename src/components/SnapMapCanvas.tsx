@@ -4,6 +4,13 @@ import { LocationPreset } from '../config/gameConfig';
 import ThreeMapLayer from '../graphics/ThreeMapLayer';
 import { RemotePlayerData } from '../graphics/RemotePlayerManager';
 import { LocalUserProfile } from '../network/MultiplayerManager';
+import {
+  PerformanceTier,
+  detectDeviceTier,
+  getDevicePixelRatio,
+  savePerformanceTier,
+  getDeviceInfo,
+} from '../utils/deviceTier';
 
 export type WidenLevel = '2x' | '5x' | '10x';
 
@@ -58,6 +65,8 @@ export interface SnapMapCanvasRef {
   flyToLocation: (lat: number, lng: number, zoom?: number) => void;
   teleportToLocation: (lat: number, lng: number) => void;
   toggleDrive: () => boolean;
+  setPerformanceTier: (tier: PerformanceTier) => void;
+  getPerformanceTier: () => PerformanceTier;
   is3D: boolean;
   isRotateMode: boolean;
   isDriving: boolean;
@@ -82,6 +91,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     const isManualInteractingRef = useRef<boolean>(false);
     const isTeleportingRef = useRef<boolean>(false);
     const widenLevelRef = useRef<WidenLevel>('2x');
+    const tierRef = useRef<PerformanceTier>(detectDeviceTier());
     const playerCoordsRef = useRef<{ lat: number; lng: number }>({
       lat: currentLocation.lat,
       lng: currentLocation.lng,
@@ -255,6 +265,18 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         }
         return res;
       },
+      setPerformanceTier: (tier: PerformanceTier) => {
+        tierRef.current = tier;
+        savePerformanceTier(tier);
+        const dpr = getDevicePixelRatio(tier);
+        if (map.current) {
+          (map.current as any).setPixelRatio(dpr);
+        }
+        threeLayer.current?.setPerformanceMode(tier === 'performance');
+      },
+      getPerformanceTier: () => {
+        return tierRef.current;
+      },
       getCameraBearing: () => {
         return map.current ? map.current.getBearing() : 0;
       },
@@ -329,6 +351,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const initCfg = WIDEN_CONFIG[widenLevelRef.current];
         const initCenter = getTargetCenter(currentLocation.lat, currentLocation.lng, 0, widenLevelRef.current);
 
+        const currentTier = tierRef.current;
+        const initialDpr = getDevicePixelRatio(currentTier);
+        const isBudgetDevice = getDeviceInfo().isLowEnd;
+
         const mapInstance = new maplibregl.Map({
           container: mapContainer.current,
           style: '/pastel-style.json',
@@ -346,6 +372,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           touchPitch: true,
           fadeDuration: 0, // Zero tile fade tweening for maximum 60fps mobile speed
           dragPan: false, // In 3D mode, swipe rotates camera; enabled in 2D mode
+          pixelRatio: initialDpr,
+          maxTileCacheSize: isBudgetDevice ? 25 : 70,
         });
 
         map.current = mapInstance;
@@ -378,6 +406,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
         mapInstance.on('style.load', () => {
           const layer = new ThreeMapLayer(currentLocation.lat, currentLocation.lng);
+          layer.setPerformanceMode(tierRef.current === 'performance');
           threeLayer.current = layer;
           mapInstance.addLayer(layer);
         });

@@ -56,6 +56,13 @@ export class SnapTreeGenerator {
   // Base tier geometry templates (cloned on demand for leak-free disposal)
   private static tierTemplateCache = new Map<string, THREE.BufferGeometry>();
 
+  // Low-End Mobile / Budget Mode flag (reduces polygon count, draw calls, and tree density)
+  public static isLowEndMode: boolean = false;
+
+  public static setLowEndMode(enabled: boolean) {
+    this.isLowEndMode = enabled;
+  }
+
   /**
    * Procedural Coniferous Tier Geometry Generator
    * Generates a faceted conical needle skirt with downward-drooping peaks/teeth along the rim.
@@ -195,40 +202,45 @@ export class SnapTreeGenerator {
     trunk.rotation.z = 0.02;
     tree.add(trunk);
 
-    // Dry branch spurs on lower bare trunk
-    const spurY = [2.2, 2.9, 3.6, 4.3];
-    const spurAngles = [0.4, 2.1, 3.8, 5.3];
-    const spurLengths = [1.3, 1.6, 1.1, 1.4];
-    for (let i = 0; i < spurY.length; i++) {
-      const spur = this.createSpur(spurLengths[i] * scale, spurAngles[i], (i % 2 === 0 ? 0.07 : -0.05), i === 1);
-      spur.position.set(0, spurY[i] * scale, 0);
-      tree.add(spur);
+    // Dry branch spurs on lower bare trunk (skipped in low-end mode for zero lag)
+    if (!this.isLowEndMode) {
+      const spurY = [2.2, 2.9, 3.6, 4.3];
+      const spurAngles = [0.4, 2.1, 3.8, 5.3];
+      const spurLengths = [1.3, 1.6, 1.1, 1.4];
+      for (let i = 0; i < spurY.length; i++) {
+        const spur = this.createSpur(spurLengths[i] * scale, spurAngles[i], (i % 2 === 0 ? 0.07 : -0.05), i === 1);
+        spur.position.set(0, spurY[i] * scale, 0);
+        tree.add(spur);
+      }
     }
 
-    // 5-tiered jagged coniferous needle skirts
-    const tiers = [
+    // Needle skirts (5 tiers in standard mode, 3 tiers in low-end mode)
+    const allTiers = [
       { y: 5.0 * scale, r: 2.3 * scale, h: 2.2 * scale, d: 0.55 * scale, mat: this.leafMatDeep },
       { y: 6.7 * scale, r: 1.95 * scale, h: 2.1 * scale, d: 0.50 * scale, mat: this.leafMatMid },
       { y: 8.3 * scale, r: 1.55 * scale, h: 2.0 * scale, d: 0.45 * scale, mat: this.leafMatVibrant },
       { y: 9.8 * scale, r: 1.20 * scale, h: 1.8 * scale, d: 0.40 * scale, mat: this.leafMatVibrant },
       { y: 11.2 * scale, r: 0.80 * scale, h: 1.8 * scale, d: 0.35 * scale, mat: this.leafMatLime },
     ];
+    const tiers = this.isLowEndMode ? [allTiers[0], allTiers[2], allTiers[4]] : allTiers;
 
     tiers.forEach((t) => {
-      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, 7), t.mat);
+      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, this.isLowEndMode ? 5 : 7), t.mat);
       tierMesh.position.y = t.y;
       tierMesh.rotation.y = Math.random() * Math.PI;
       tree.add(tierMesh);
     });
 
     // Circular ground shadow
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.6 * scale, 12), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.6 * scale, this.isLowEndMode ? 6 : 12), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     tree.add(shadow);
 
-    // Forest floor accent
-    tree.add(this.createForestFloorDetails(scale));
+    // Forest floor accent (skipped in low-end mode)
+    if (!this.isLowEndMode) {
+      tree.add(this.createForestFloorDetails(scale));
+    }
 
     return tree;
   }
@@ -247,39 +259,44 @@ export class SnapTreeGenerator {
     trunk.rotation.z = -0.03;
     tree.add(trunk);
 
-    // Dry branch spurs
-    const spurs = [
-      { y: 2.0 * scale, len: 1.4 * scale, rotY: 1.0 },
-      { y: 2.7 * scale, len: 1.7 * scale, rotY: 3.2 },
-      { y: 3.4 * scale, len: 1.2 * scale, rotY: 5.0 },
-    ];
-    spurs.forEach((s, idx) => {
-      const sp = this.createSpur(s.len, s.rotY, idx % 2 === 0 ? 0.08 : -0.06, idx === 1);
-      sp.position.set(0, s.y, 0);
-      tree.add(sp);
-    });
+    // Dry branch spurs (skipped in low-end mode)
+    if (!this.isLowEndMode) {
+      const spurs = [
+        { y: 2.0 * scale, len: 1.4 * scale, rotY: 1.0 },
+        { y: 2.7 * scale, len: 1.7 * scale, rotY: 3.2 },
+        { y: 3.4 * scale, len: 1.2 * scale, rotY: 5.0 },
+      ];
+      spurs.forEach((s, idx) => {
+        const sp = this.createSpur(s.len, s.rotY, idx % 2 === 0 ? 0.08 : -0.06, idx === 1);
+        sp.position.set(0, s.y, 0);
+        tree.add(sp);
+      });
+    }
 
-    // 4 wide, lush needle tiers
-    const tiers = [
+    // Needle tiers (4 tiers in standard, 2 tiers in low-end)
+    const allTiers = [
       { y: 4.2 * scale, r: 2.6 * scale, h: 2.3 * scale, d: 0.60 * scale, mat: this.leafMatNordic },
       { y: 5.9 * scale, r: 2.1 * scale, h: 2.2 * scale, d: 0.52 * scale, mat: this.leafMatMossy },
       { y: 7.5 * scale, r: 1.6 * scale, h: 2.0 * scale, d: 0.46 * scale, mat: this.leafMatMid },
       { y: 9.0 * scale, r: 1.0 * scale, h: 1.9 * scale, d: 0.38 * scale, mat: this.leafMatVibrant },
     ];
+    const tiers = this.isLowEndMode ? [allTiers[0], allTiers[2]] : allTiers;
 
     tiers.forEach((t) => {
-      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, 8), t.mat);
+      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, this.isLowEndMode ? 6 : 8), t.mat);
       tierMesh.position.y = t.y;
       tierMesh.rotation.y = Math.random() * Math.PI;
       tree.add(tierMesh);
     });
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.9 * scale, 12), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.9 * scale, this.isLowEndMode ? 6 : 12), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     tree.add(shadow);
 
-    tree.add(this.createForestFloorDetails(scale));
+    if (!this.isLowEndMode) {
+      tree.add(this.createForestFloorDetails(scale));
+    }
 
     return tree;
   }
@@ -299,22 +316,23 @@ export class SnapTreeGenerator {
     tree.add(trunk);
 
     // Slender tall flame-like faceted conifer spire
-    const tiers = [
+    const allTiers = [
       { y: 1.2 * scale, r: 0.92 * scale, h: 2.4 * scale, d: 0.25 * scale, mat: this.leafMatDeep },
       { y: 3.0 * scale, r: 0.88 * scale, h: 2.3 * scale, d: 0.22 * scale, mat: this.leafMatMid },
       { y: 4.8 * scale, r: 0.76 * scale, h: 2.2 * scale, d: 0.20 * scale, mat: this.leafMatVibrant },
       { y: 6.5 * scale, r: 0.55 * scale, h: 2.2 * scale, d: 0.16 * scale, mat: this.leafMatVibrant },
       { y: 8.0 * scale, r: 0.32 * scale, h: 1.8 * scale, d: 0.12 * scale, mat: this.leafMatLime },
     ];
+    const tiers = this.isLowEndMode ? [allTiers[0], allTiers[2], allTiers[4]] : allTiers;
 
     tiers.forEach((t) => {
-      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, 6), t.mat);
+      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, this.isLowEndMode ? 5 : 6), t.mat);
       tierMesh.position.y = t.y;
       tierMesh.rotation.y = Math.random() * Math.PI;
       tree.add(tierMesh);
     });
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.4 * scale, 10), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.4 * scale, this.isLowEndMode ? 6 : 10), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     tree.add(shadow);
@@ -335,31 +353,34 @@ export class SnapTreeGenerator {
     trunk.position.y = trunkHeight / 2;
     tree.add(trunk);
 
-    // Dry branch spurs
-    const sp1 = this.createSpur(1.1 * scale, 0.8, 0.06);
-    sp1.position.set(0, 1.8 * scale, 0);
-    tree.add(sp1);
+    // Dry branch spurs (skipped in low-end mode)
+    if (!this.isLowEndMode) {
+      const sp1 = this.createSpur(1.1 * scale, 0.8, 0.06);
+      sp1.position.set(0, 1.8 * scale, 0);
+      tree.add(sp1);
 
-    const sp2 = this.createSpur(1.3 * scale, 3.4, -0.05);
-    sp2.position.set(0, 2.5 * scale, 0);
-    tree.add(sp2);
+      const sp2 = this.createSpur(1.3 * scale, 3.4, -0.05);
+      sp2.position.set(0, 2.5 * scale, 0);
+      tree.add(sp2);
+    }
 
-    // 4 needle tiers
-    const tiers = [
+    // 4 needle tiers (2 tiers in low-end mode)
+    const allTiers = [
       { y: 3.2 * scale, r: 2.1 * scale, h: 2.0 * scale, d: 0.48 * scale, mat: this.leafMatDeep },
       { y: 4.8 * scale, r: 1.7 * scale, h: 1.9 * scale, d: 0.42 * scale, mat: this.leafMatMid },
       { y: 6.2 * scale, r: 1.25 * scale, h: 1.7 * scale, d: 0.36 * scale, mat: this.leafMatVibrant },
       { y: 7.4 * scale, r: 0.75 * scale, h: 1.6 * scale, d: 0.30 * scale, mat: this.leafMatLime },
     ];
+    const tiers = this.isLowEndMode ? [allTiers[0], allTiers[2]] : allTiers;
 
     tiers.forEach((t) => {
-      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, 7), t.mat);
+      const tierMesh = new THREE.Mesh(this.getTierGeometry(t.r, t.h, t.d, this.isLowEndMode ? 5 : 7), t.mat);
       tierMesh.position.y = t.y;
       tierMesh.rotation.y = Math.random() * Math.PI;
       tree.add(tierMesh);
     });
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.3 * scale, 12), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.3 * scale, this.isLowEndMode ? 6 : 12), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     tree.add(shadow);
@@ -415,8 +436,8 @@ export class SnapTreeGenerator {
     trunk.rotation.z = 0.035;
     tree.add(trunk);
 
-    // Weathered dry branches protruding all along the trunk
-    const branchConfigs = [
+    // Weathered dry branches protruding along trunk (reduced count in low-end mode)
+    const allBranches = [
       { y: 2.5 * scale, len: 1.6 * scale, rotY: 0.5, rotZ: 0.08, sub: true },
       { y: 3.4 * scale, len: 1.9 * scale, rotY: 1.8, rotZ: -0.06, sub: true },
       { y: 4.4 * scale, len: 2.1 * scale, rotY: 3.2, rotZ: 0.05, sub: true },
@@ -426,6 +447,9 @@ export class SnapTreeGenerator {
       { y: 8.5 * scale, len: 1.0 * scale, rotY: 3.8, rotZ: 0.06, sub: false },
       { y: 9.6 * scale, len: 0.7 * scale, rotY: 5.2, rotZ: -0.05, sub: false },
     ];
+    const branchConfigs = this.isLowEndMode
+      ? [allBranches[0], allBranches[2], allBranches[4], allBranches[6]]
+      : allBranches;
 
     branchConfigs.forEach((b) => {
       const spur = this.createSpur(b.len, b.rotY, b.rotZ, b.sub);
@@ -433,7 +457,7 @@ export class SnapTreeGenerator {
       tree.add(spur);
     });
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.0 * scale, 10), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.0 * scale, this.isLowEndMode ? 6 : 10), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     tree.add(shadow);
@@ -454,12 +478,13 @@ export class SnapTreeGenerator {
     shrub.add(stem);
 
     // Clustered faceted low-poly foliage boulders
-    const foliageOffsets = [
+    const allFoliage = [
       { x: 0, y: 1.3 * scale, z: 0, r: 0.75 * scale, mat: this.leafMatVibrant },
       { x: 0.35 * scale, y: 1.0 * scale, z: 0.25 * scale, r: 0.60 * scale, mat: this.leafMatMid },
       { x: -0.32 * scale, y: 0.95 * scale, z: -0.20 * scale, r: 0.55 * scale, mat: this.leafMatDeep },
       { x: -0.25 * scale, y: 1.15 * scale, z: 0.30 * scale, r: 0.50 * scale, mat: this.leafMatLime },
     ];
+    const foliageOffsets = this.isLowEndMode ? [allFoliage[0], allFoliage[1]] : allFoliage;
 
     foliageOffsets.forEach((f) => {
       const geo = new THREE.DodecahedronGeometry(f.r, 0);
@@ -469,7 +494,7 @@ export class SnapTreeGenerator {
       shrub.add(mesh);
     });
 
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.2 * scale, 8), this.shadowMat);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.2 * scale, this.isLowEndMode ? 6 : 8), this.shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.06;
     shrub.add(shadow);
@@ -551,10 +576,14 @@ export class SnapTreeGenerator {
     }
     const profile = ZoneProfileRegistry.get(zone);
 
-    // Number of trees adapted to zone density
+    // Number of trees adapted to zone density (strictly throttled in low-end mobile mode)
     const seedBase = chunkX * 123 + chunkZ * 456;
     const countVar = Math.floor(seededRandom(seedBase) * 6);
-    const treeCount = Math.max(2, profile.treeProfile.baseDensity + countVar);
+    let treeCount = Math.max(2, profile.treeProfile.baseDensity + countVar);
+    if (this.isLowEndMode) {
+      // In budget mobile mode, limit max trees per chunk to 3-4 (down from 12-14)
+      treeCount = Math.min(4, Math.max(2, Math.floor(treeCount * 0.4)));
+    }
 
     for (let i = 0; i < treeCount; i++) {
       const seed = chunkX * 1000 + chunkZ * 100 + i;

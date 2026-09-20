@@ -10,6 +10,7 @@ import VoiceControls from './components/VoiceControls';
 import { MultiplayerManager, LocalUserProfile } from './network/MultiplayerManager';
 import { RemotePlayerData } from './graphics/RemotePlayerManager';
 import { GeocodingResult } from './services/geocodingService';
+import { PerformanceTier, detectDeviceTier } from './utils/deviceTier';
 import {
   MapPin,
   ChevronDown,
@@ -63,6 +64,7 @@ function App() {
   const [isRotateMode, setIsRotateMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'memories' | 'top' | 'trending' | 'visited'>('top');
   const [widenLevel, setWidenLevel] = useState<WidenLevel>('2x');
+  const [performanceTier, setPerformanceTierState] = useState<PerformanceTier>(() => detectDeviceTier());
 
   // User profile state - 100% ephemeral in memory, never stored in localStorage
   const [userProfile, setUserProfile] = useState<LocalUserProfile | null>(null);
@@ -237,6 +239,14 @@ function App() {
     if (canvasRef.current) {
       const mode = canvasRef.current.toggle3D();
       setIs3DMode(mode);
+    }
+  };
+
+  const handleTogglePerformance = () => {
+    const nextTier: PerformanceTier = performanceTier === 'performance' ? 'high' : 'performance';
+    setPerformanceTierState(nextTier);
+    if (canvasRef.current) {
+      canvasRef.current.setPerformanceTier(nextTier);
     }
   };
 
@@ -809,6 +819,23 @@ function App() {
           <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${is3DMode ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
             3D
           </span>
+        </button>
+
+        {/* Performance Mode / Battery Saver Toggle (Auto-optimized for Budget Mobile) */}
+        <button
+          onClick={handleTogglePerformance}
+          className={`glass-pill-button px-2 py-1 sm:px-2.5 sm:py-1.5 flex items-center gap-1 text-[10px] sm:text-[11px] font-black shadow-lg transition-all ${
+            performanceTier === 'performance'
+              ? 'bg-amber-500 text-white ring-2 ring-amber-300'
+              : 'bg-white/90 text-gray-700'
+          }`}
+          title={
+            performanceTier === 'performance'
+              ? '⚡ പെർഫോമൻസ് മോഡ്: ബജറ്റ് ഫോണുകളിൽ ലാഗും ചൂടും ഇല്ലാതെ സ്മൂത്ത് 60 FPS (ക്വാളിറ്റി കൂട്ടാൻ ക്ലിക്ക് ചെയ്യുക)'
+              : '✨ ഹൈ ക്വാളിറ്റി മോഡ് (ബാറ്ററിയും വേഗതയും കൂട്ടാൻ പെർഫോമൻസ് മോഡിലേക്ക് മാറ്റുക)'
+          }
+        >
+          <span>{performanceTier === 'performance' ? '⚡ 60FPS' : '✨ HD'}</span>
         </button>
 
         {/* 3D Orbit Rotate Mode Toggle */}
