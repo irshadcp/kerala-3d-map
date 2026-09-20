@@ -3,6 +3,7 @@ import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { KeralaMaritimeGenerator } from './KeralaMaritimeGenerator';
 import { GeoCoords } from '../core/geoCoords';
 import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
+import { isKeralaOceanCoastline, isKeralaBackwaterBasin } from '../core/ZoneClassifier';
 
 export interface PlacedMaritimeItemInfo {
   type: 'houseboat' | 'fishing_boat' | 'boat_jetty' | 'fish_market';
@@ -50,6 +51,17 @@ export class KeralaMaritimeManager {
       return false;
     }
 
+    // -------------------------------------------------------------
+    // Adaptive check: Maritime elements (കെട്ടുവള്ളം, ജെട്ടി, മീൻചന്ത)
+    // MUST ONLY be placed in genuine Backwater basins (കായൽ) or Ocean Coast (കടൽ).
+    // NEVER in inland cities/suburbs!
+    // -------------------------------------------------------------
+    const isCoastal = isKeralaOceanCoastline(originLat, originLng);
+    const isBackwater = isKeralaBackwaterBasin(originLat, originLng);
+    if (!isCoastal && !isBackwater) {
+      return false;
+    }
+
     let itemsPlaced = 0;
 
     for (const water of obstacleMap.waterObstacles) {
@@ -90,6 +102,10 @@ export class KeralaMaritimeManager {
             // Place along water edge, parallel to bank
             const hbx = midX + nx * 3.5;
             const hbz = midZ + nz * 3.5;
+            const hbAngle = Math.atan2(tx, tz);
+
+            if (obstacleMap.isRoadCollision(hbx, hbz, 11, 4, hbAngle)) continue;
+            if (obstacleMap.isBuildingCollision(hbx, hbz, 11, 4, hbAngle)) continue;
 
             const key = `hb_${Math.round(hbx / 10)}_${Math.round(hbz / 10)}`;
             if (!this.items.has(key)) {
@@ -97,7 +113,7 @@ export class KeralaMaritimeManager {
 
               const model = KeralaMaritimeGenerator.createHouseboatModel();
               model.position.set(hbx, 0.05, hbz);
-              model.rotation.y = Math.atan2(tx, tz); // Orient parallel to water edge
+              model.rotation.y = hbAngle; // Orient parallel to water edge
 
               this.scene.add(model);
               this.items.set(key, model);
@@ -128,6 +144,10 @@ export class KeralaMaritimeManager {
           if (!tooCloseJetty) {
             const jx = midX;
             const jz = midZ;
+            const jAngle = Math.atan2(nx, nz);
+
+            if (obstacleMap.isRoadCollision(jx, jz, 7, 3, jAngle)) continue;
+            if (obstacleMap.isBuildingCollision(jx, jz, 7, 3, jAngle)) continue;
 
             const key = `jetty_${Math.round(jx / 10)}_${Math.round(jz / 10)}`;
             if (!this.items.has(key)) {
@@ -135,7 +155,7 @@ export class KeralaMaritimeManager {
 
               const model = KeralaMaritimeGenerator.createBoatJettyModel();
               model.position.set(jx, 0, jz);
-              model.rotation.y = Math.atan2(nx, nz); // Extend perpendicular out into water
+              model.rotation.y = jAngle; // Extend perpendicular out into water
 
               this.scene.add(model);
               this.items.set(key, model);
@@ -166,12 +186,16 @@ export class KeralaMaritimeManager {
           if (!tooCloseBoat) {
             const bx = midX + nx * 1.5;
             const bz = midZ + nz * 1.5;
+            const bAngle = Math.atan2(tx, tz) + (Math.random() - 0.5) * 0.4;
+
+            if (obstacleMap.isRoadCollision(bx, bz, 4, 1.5, bAngle)) continue;
+            if (obstacleMap.isBuildingCollision(bx, bz, 4, 1.5, bAngle)) continue;
 
             const key = `boat_${Math.round(bx / 8)}_${Math.round(bz / 8)}`;
             if (!this.items.has(key)) {
               const model = KeralaMaritimeGenerator.createFishingBoatModel();
               model.position.set(bx, 0.05, bz);
-              model.rotation.y = Math.atan2(tx, tz) + (Math.random() - 0.5) * 0.4;
+              model.rotation.y = bAngle;
 
               this.scene.add(model);
               this.items.set(key, model);
@@ -200,11 +224,16 @@ export class KeralaMaritimeManager {
           );
 
           if (!tooCloseMarket) {
-            // Placed on landward side: -nx * 12
+            // Placed on landward side: -nx * 10
             const mx = midX - nx * 10;
             const mz = midZ - nz * 10;
+            const mAngle = Math.atan2(tx, tz);
 
-            if (obstacleMap.isFootprintClear(mx, mz, 7, 5.5)) {
+            if (
+              obstacleMap.isFootprintClear(mx, mz, 7, 5.5) &&
+              !obstacleMap.isRoadCollision(mx, mz, 7, 5.5, mAngle) &&
+              !obstacleMap.isBuildingCollision(mx, mz, 7, 5.5, mAngle)
+            ) {
               const key = `market_${Math.round(mx / 10)}_${Math.round(mz / 10)}`;
               if (!this.items.has(key)) {
                 obstacleMap.registerCustomObstacle(mx - 7, mx + 7, mz - 5.5, mz + 5.5);

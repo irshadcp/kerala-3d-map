@@ -43,7 +43,7 @@ export interface ExtractedRoad {
 
 const BUCKET_SIZE = 50; // 50m spatial hash cells
 
-import { ZoneClassifier, KeralaZoneType, LocalAreaContext } from '../core/ZoneClassifier';
+import { ZoneClassifier, KeralaZoneType, LocalAreaContext, isKeralaOceanCoastline } from '../core/ZoneClassifier';
 
 export class SpatialObstacleMap {
   private buildingBuckets = new Map<string, BuildingObstacle[]>();
@@ -412,6 +412,143 @@ export class SpatialObstacleMap {
     return true;
   }
 
+  /**
+   * Tests if an oriented rectangular footprint intersects ANY road (or road buffer) in the map.
+   * angle is rotation in radians.
+   */
+  public isRoadCollision(
+    px: number,
+    pz: number,
+    halfLength: number,
+    halfWidth: number,
+    angle: number,
+    ignoreRoadP1?: Point2D,
+    ignoreRoadP2?: Point2D
+  ): boolean {
+    if (!this.isReady) return true;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const stepL = Math.max(3, halfLength / 4);
+    const stepW = Math.max(2, halfWidth / 2);
+
+    for (let u = -halfLength; u <= halfLength; u += stepL) {
+      for (let v = -halfWidth; v <= halfWidth; v += stepW) {
+        const sx = px + cos * u - sin * v;
+        const sz = pz + sin * u + cos * v;
+
+        const cellX = Math.floor(sx / BUCKET_SIZE);
+        const cellZ = Math.floor(sz / BUCKET_SIZE);
+        const roads = this.roadBuckets.get(this.getBucketKey(cellX, cellZ));
+        if (roads) {
+          for (const r of roads) {
+            if (ignoreRoadP1 && Math.hypot(r.p1.x - ignoreRoadP1.x, r.p1.z - ignoreRoadP1.z) < 2) continue;
+            if (ignoreRoadP2 && Math.hypot(r.p2.x - ignoreRoadP2.x, r.p2.z - ignoreRoadP2.z) < 2) continue;
+            const dist = this.distToSegment(sx, sz, r.p1, r.p2);
+            if (dist < r.buffer + 0.5) {
+              return true; // Overlaps or clips road!
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Tests if an oriented rectangular footprint intersects ANY building in the map.
+   */
+  public isBuildingCollision(
+    px: number,
+    pz: number,
+    halfLength: number,
+    halfWidth: number,
+    angle: number
+  ): boolean {
+    if (!this.isReady) return true;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const stepL = Math.max(3, halfLength / 3);
+    const stepW = Math.max(2, halfWidth / 2);
+
+    for (let u = -halfLength; u <= halfLength; u += stepL) {
+      for (let v = -halfWidth; v <= halfWidth; v += stepW) {
+        const sx = px + cos * u - sin * v;
+        const sz = pz + sin * u + cos * v;
+
+        const cellX = Math.floor(sx / BUCKET_SIZE);
+        const cellZ = Math.floor(sz / BUCKET_SIZE);
+        const bldgs = this.buildingBuckets.get(this.getBucketKey(cellX, cellZ));
+        if (bldgs) {
+          for (const b of bldgs) {
+            if (sx < b.minX - 1 || sx > b.maxX + 1 || sz < b.minZ - 1 || sz > b.maxZ + 1) continue;
+            if (this.pointInPolygon(sx, sz, b.rings[0])) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns true ONLY if the given coordinate (px, pz) is actually inside a water polygon.
+   */
+  public isPointInWater(px: number, pz: number, clearance = 0): boolean {
+    if (!this.isReady) return false;
+    const cellX = Math.floor(px / BUCKET_SIZE);
+    const cellZ = Math.floor(pz / BUCKET_SIZE);
+    const waters = this.waterBuckets.get(this.getBucketKey(cellX, cellZ));
+    if (!waters) return false;
+    for (const w of waters) {
+      if (px < w.minX - clearance || px > w.maxX + clearance || pz < w.minZ - clearance || pz > w.maxZ + clearance) {
+        continue;
+      }
+      if (this.pointInPolygon(px, pz, w.rings[0])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns distance to the nearest water body in meters.
+   */
+  public getDistanceToWater(px: number, pz: number, searchRadiusMeters = 80): number {
+    if (!this.isReady) return Infinity;
+    const cellRadius = Math.ceil(searchRadiusMeters / BUCKET_SIZE);
+    const cellX = Math.floor(px / BUCKET_SIZE);
+    const cellZ = Math.floor(pz / BUCKET_SIZE);
+    let minDist = Infinity;
+
+    for (let cx = cellX - cellRadius; cx <= cellX + cellRadius; cx++) {
+      for (let cz = cellZ - cellRadius; cz <= cellZ + cellRadius; cz++) {
+        const waters = this.waterBuckets.get(this.getBucketKey(cx, cz));
+        if (!waters) continue;
+        for (const w of waters) {
+          if (
+            px < w.minX - searchRadiusMeters ||
+            px > w.maxX + searchRadiusMeters ||
+            pz < w.minZ - searchRadiusMeters ||
+            pz > w.maxZ + searchRadiusMeters
+          ) {
+            continue;
+          }
+          if (this.pointInPolygon(px, pz, w.rings[0])) {
+            return 0;
+          }
+          for (const ring of w.rings) {
+            for (let i = 0; i < ring.length - 1; i++) {
+              const d = this.distToSegment(px, pz, ring[i], ring[i + 1]);
+              if (d < minDist) minDist = d;
+            }
+          }
+        }
+      }
+    }
+    return minDist;
+  }
+
   private addWaterPolygon(ringsGeo: number[][][], originLat: number, originLng: number) {
     if (!ringsGeo || ringsGeo.length === 0) return;
 
@@ -607,17 +744,8 @@ export class SpatialObstacleMap {
     }
 
     const coords = GeoCoords.toLatLng(px, pz, originLat, originLng);
-
-    // Distance to nearest water
-    let nearestWaterDist = Infinity;
-    for (let cx = cellX - 2; cx <= cellX + 2; cx++) {
-      for (let cz = cellZ - 2; cz <= cellZ + 2; cz++) {
-        const w = this.waterBuckets.get(this.getBucketKey(cx, cz));
-        if (w && w.length > 0) {
-          nearestWaterDist = Math.min(nearestWaterDist, 100);
-        }
-      }
-    }
+    const nearestWaterDist = this.getDistanceToWater(px, pz, 100);
+    const isOcean = isKeralaOceanCoastline(coords.lat, coords.lng);
 
     const localLandcover = this.landcoverBuckets.get(this.getBucketKey(cellX, cellZ)) || new Set<string>();
 
@@ -628,7 +756,7 @@ export class SpatialObstacleMap {
       hasResidential: buildingCount > 6,
       landcoverTypes: localLandcover,
       nearestWaterDistance: nearestWaterDist,
-      nearestWaterType: coords.lng < 76.24 ? 'ocean' : 'lake',
+      nearestWaterType: isOcean ? 'ocean' : 'lake',
     };
 
     return ZoneClassifier.classify(coords.lat, coords.lng, context);
