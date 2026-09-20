@@ -43,10 +43,14 @@ export interface ExtractedRoad {
 
 const BUCKET_SIZE = 50; // 50m spatial hash cells
 
+import { ZoneClassifier, KeralaZoneType, LocalAreaContext } from '../core/ZoneClassifier';
+
 export class SpatialObstacleMap {
   private buildingBuckets = new Map<string, BuildingObstacle[]>();
   private roadBuckets = new Map<string, RoadObstacle[]>();
   private waterBuckets = new Map<string, WaterObstacle[]>();
+  private landcoverBuckets = new Map<string, Set<string>>();
+  private commercialBuckets = new Set<string>();
   
   public roads: ExtractedRoad[] = [];
   public totalBuildings = 0;
@@ -85,6 +89,25 @@ export class SpatialObstacleMap {
       buildingFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' });
       roadFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' });
       waterFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'water' });
+      const landcoverFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'landcover' });
+      const landuseFeatures = map.querySourceFeatures('openmaptiles', { sourceLayer: 'landuse' });
+
+      // Process landcover tags into spatial buckets
+      for (const feat of landcoverFeatures) {
+        const subclass = (feat.properties?.subclass || feat.properties?.class || '') as string;
+        if (!subclass || !feat.geometry) continue;
+        const coords = (feat.geometry as any).coordinates;
+        this.addTagToBuckets(coords, subclass, originLat, originLng);
+      }
+
+      // Process landuse tags (commercial, residential, industrial)
+      for (const feat of landuseFeatures) {
+        const luClass = (feat.properties?.class || '') as string;
+        if (luClass === 'commercial' || luClass === 'retail') {
+          const coords = (feat.geometry as any).coordinates;
+          this.addTagToBuckets(coords, 'commercial', originLat, originLng);
+        }
+      }
     } catch {
       return false;
     }
@@ -96,6 +119,8 @@ export class SpatialObstacleMap {
     this.buildingBuckets.clear();
     this.roadBuckets.clear();
     this.waterBuckets.clear();
+    this.landcoverBuckets.clear();
+    this.commercialBuckets.clear();
     this.roads = [];
     this.totalBuildings = buildingFeatures.length;
     this.totalRoads = roadFeatures.length;
@@ -515,5 +540,94 @@ export class SpatialObstacleMap {
     const projX = p1.x + t * dx;
     const projZ = p1.z + t * dz;
     return Math.hypot(px - projX, pz - projZ);
+  }
+
+  private addTagToBuckets(coords: any, tag: string, originLat: number, originLng: number) {
+    if (!coords) return;
+    const processPt = (lng: number, lat: number) => {
+      const p = GeoCoords.toLocalMeters(lat, lng, originLat, originLng);
+      const cellX = Math.floor(p.x / BUCKET_SIZE);
+      const cellZ = Math.floor(p.z / BUCKET_SIZE);
+      const key = this.getBucketKey(cellX, cellZ);
+      if (tag === 'commercial') {
+        this.commercialBuckets.add(`${cellX},${cellZ}`);
+      } else {
+        let set = this.landcoverBuckets.get(key);
+        if (!set) {
+          set = new Set<string>();
+          this.landcoverBuckets.set(key, set);
+        }
+        set.add(tag);
+      }
+    };
+
+    if (typeof coords[0] === 'number') {
+      processPt(coords[0], coords[1]);
+    } else {
+      for (const item of coords) {
+        if (!item) continue;
+        if (typeof item[0] === 'number') {
+          processPt(item[0], item[1]);
+        } else if (Array.isArray(item[0])) {
+          for (const sub of item) {
+            if (sub && typeof sub[0] === 'number') {
+              processPt(sub[0], sub[1]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Evaluates the active Kerala environmental zone at coordinate (px, pz)
+   */
+  public getZoneAt(px: number, pz: number, originLat: number, originLng: number): KeralaZoneType {
+    const cellRadius = 3; // ~150m-200m radius
+    const cellX = Math.floor(px / BUCKET_SIZE);
+    const cellZ = Math.floor(pz / BUCKET_SIZE);
+    let buildingCount = 0;
+    let hasHighway = false;
+
+    for (let cx = cellX - cellRadius; cx <= cellX + cellRadius; cx++) {
+      for (let cz = cellZ - cellRadius; cz <= cellZ + cellRadius; cz++) {
+        const key = this.getBucketKey(cx, cz);
+        const b = this.buildingBuckets.get(key);
+        if (b) buildingCount += b.length;
+        const r = this.roadBuckets.get(key);
+        if (r) {
+          for (const road of r) {
+            if (road.buffer >= 14) hasHighway = true;
+          }
+        }
+      }
+    }
+
+    const coords = GeoCoords.toLatLng(px, pz, originLat, originLng);
+
+    // Distance to nearest water
+    let nearestWaterDist = Infinity;
+    for (let cx = cellX - 2; cx <= cellX + 2; cx++) {
+      for (let cz = cellZ - 2; cz <= cellZ + 2; cz++) {
+        const w = this.waterBuckets.get(this.getBucketKey(cx, cz));
+        if (w && w.length > 0) {
+          nearestWaterDist = Math.min(nearestWaterDist, 100);
+        }
+      }
+    }
+
+    const localLandcover = this.landcoverBuckets.get(this.getBucketKey(cellX, cellZ)) || new Set<string>();
+
+    const context: LocalAreaContext = {
+      buildingCount: Math.round(buildingCount / 3),
+      hasHighway,
+      hasCommercial: this.commercialBuckets.has(`${cellX},${cellZ}`),
+      hasResidential: buildingCount > 6,
+      landcoverTypes: localLandcover,
+      nearestWaterDistance: nearestWaterDist,
+      nearestWaterType: coords.lng < 76.24 ? 'ocean' : 'lake',
+    };
+
+    return ZoneClassifier.classify(coords.lat, coords.lng, context);
   }
 }

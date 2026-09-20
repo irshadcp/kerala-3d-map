@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { BusStopGenerator } from './BusStopGenerator';
 import { GeoCoords } from '../core/geoCoords';
+import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
 
 export interface PlacedBusStopInfo {
   name: string;
@@ -85,6 +86,15 @@ export class BusStopManager {
         const centerDist = road.buffer + 2.3;
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
+
+        // Kerala Zone Environmental Check
+        const zone = obstacleMap.getZoneAt(cx, cz, originLat, originLng);
+        const profile = ZoneProfileRegistry.get(zone);
+        if (!profile.allowedAssets.includes('bus_stop')) {
+          continue;
+        }
+
+        const minDistance = profile.spacing.busStop;
 
         // Verify distance from exact candidate position
         const tooCloseCandidate = this.stopPositions.some(

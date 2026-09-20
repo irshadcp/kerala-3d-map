@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { SpatialObstacleMap } from './SpatialObstacleMap';
+import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
+import { KeralaZoneType } from '../core/ZoneClassifier';
 
 // Simple seeded random generator
 function seededRandom(seed: number) {
@@ -8,37 +10,159 @@ function seededRandom(seed: number) {
 }
 
 export class SnapTreeGenerator {
-  static generateTreesForChunk(
+  private static createCoconutPalmModel(color: THREE.Color, scale = 1.0): THREE.Group {
+    const palm = new THREE.Group();
+    palm.name = 'kerala_coconut_palm';
+
+    // 1. Curved Slender Trunk (Lean angle)
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+    
+    // Lower trunk
+    const lowerTrunkGeo = new THREE.CylinderGeometry(0.32 * scale, 0.44 * scale, 4.2 * scale, 7);
+    const lowerTrunk = new THREE.Mesh(lowerTrunkGeo, trunkMat);
+    lowerTrunk.position.set(0, 2.1 * scale, 0);
+    lowerTrunk.rotation.z = 0.08; // Natural gentle lean
+    palm.add(lowerTrunk);
+
+    // Upper trunk (slightly curved further)
+    const upperTrunkGeo = new THREE.CylinderGeometry(0.24 * scale, 0.32 * scale, 4.2 * scale, 7);
+    const upperTrunk = new THREE.Mesh(upperTrunkGeo, trunkMat);
+    upperTrunk.position.set(0.35 * scale, 5.8 * scale, 0);
+    upperTrunk.rotation.z = 0.14;
+    palm.add(upperTrunk);
+
+    // 2. Radiating Palm Fronds (7 Drooping Fronds)
+    const crownGroup = new THREE.Group();
+    crownGroup.position.set(0.65 * scale, 7.8 * scale, 0);
+
+    const frondMat = new THREE.MeshLambertMaterial({
+      color: color,
+      side: THREE.DoubleSide,
+    });
+
+    const frondCount = 7;
+    for (let f = 0; f < frondCount; f++) {
+      const angle = (f / frondCount) * Math.PI * 2;
+      const frondGeo = new THREE.BoxGeometry(0.45 * scale, 0.06 * scale, 3.8 * scale);
+      const frond = new THREE.Mesh(frondGeo, frondMat);
+
+      frond.rotation.y = angle;
+      frond.rotation.x = 0.45; // Arch downwards
+      frond.position.set(Math.sin(angle) * 1.4 * scale, -0.4 * scale, Math.cos(angle) * 1.4 * scale);
+      crownGroup.add(frond);
+    }
+
+    // 3. Cluster of Coconuts
+    const nutGeo = new THREE.SphereGeometry(0.25 * scale, 6, 6);
+    const nutMat = new THREE.MeshLambertMaterial({ color: 0x451a03 });
+    for (let n = 0; n < 3; n++) {
+      const nut = new THREE.Mesh(nutGeo, nutMat);
+      const na = n * (Math.PI * 2 / 3);
+      nut.position.set(Math.sin(na) * 0.35 * scale, -0.2 * scale, Math.cos(na) * 0.35 * scale);
+      crownGroup.add(nut);
+    }
+
+    palm.add(crownGroup);
+
+    // Soft ground shadow
+    const shadowGeo = new THREE.CircleGeometry(2.8 * scale, 12);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x112200,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    });
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.08;
+    palm.add(shadow);
+
+    return palm;
+  }
+
+  public static generateTreesForChunk(
     chunkX: number,
     chunkZ: number,
     chunkSize: number,
     _scene: THREE.Scene,
-    obstacleMap: SpatialObstacleMap
+    obstacleMap: SpatialObstacleMap,
+    originLat?: number,
+    originLng?: number
   ): THREE.Group {
     const group = new THREE.Group();
     group.name = `chunk_${chunkX}_${chunkZ}`;
 
-    // 8-15 trees per 150m chunk
-    const treeCount = Math.floor(8 + seededRandom(chunkX * 123 + chunkZ * 456) * 8);
+    const centerX = chunkX * chunkSize;
+    const centerZ = chunkZ * chunkSize;
 
-    // Snapchat tree geometry: slightly elongated vertical lollipop puffs
-    const canopyGeoSmall = new THREE.SphereGeometry(2.4, 12, 12);
-    canopyGeoSmall.scale(1, 1.35, 1);
+    // Detect zone for this chunk
+    let zone: KeralaZoneType = 'suburban';
+    if (originLat !== undefined && originLng !== undefined) {
+      zone = obstacleMap.getZoneAt(centerX, centerZ, originLat, originLng);
+    }
+    const profile = ZoneProfileRegistry.get(zone);
 
-    const canopyGeoLarge = new THREE.SphereGeometry(3.6, 12, 12);
-    canopyGeoLarge.scale(1, 1.35, 1);
+    // Number of trees adapted to zone density
+    const seedBase = chunkX * 123 + chunkZ * 456;
+    const countVar = Math.floor(seededRandom(seedBase) * 6);
+    const treeCount = Math.max(1, profile.treeProfile.baseDensity + countVar);
 
-    // Vibrant, fresh cute green colors matching Snapchat Map
-    const color1 = new THREE.Color('#8ed438'); // Bright fresh lime
-    const color2 = new THREE.Color('#aee848'); // Soft yellow-lime
+    // If Coconut Palm zone (coastal, backwater, rural):
+    if (profile.treeProfile.primarySpecies === 'coconut_palm') {
+      const colors = profile.treeProfile.canopyColors.map((c) => new THREE.Color(c));
+
+      for (let i = 0; i < treeCount; i++) {
+        const seed = chunkX * 1000 + chunkZ * 100 + i;
+        let rx = chunkX * chunkSize - chunkSize / 2 + seededRandom(seed) * chunkSize;
+        let rz = chunkZ * chunkSize - chunkSize / 2 + seededRandom(seed + 1) * chunkSize;
+
+        // In Paddy fields: trees only along chunk borders / field bunds (വരമ്പ്)
+        if (profile.treeProfile.onlyOnBunds) {
+          if (seededRandom(seed + 4) > 0.5) {
+            rx = chunkX * chunkSize - chunkSize / 2 + (seededRandom(seed + 5) > 0.5 ? 8 : chunkSize - 8);
+          } else {
+            rz = chunkZ * chunkSize - chunkSize / 2 + (seededRandom(seed + 6) > 0.5 ? 8 : chunkSize - 8);
+          }
+        }
+
+        // Strict collision check
+        if (obstacleMap.isBlocked(rx, rz, 3.5)) {
+          continue;
+        }
+
+        const col = colors[i % colors.length];
+        const scale = 0.85 + seededRandom(seed + 2) * 0.35;
+        const palm = this.createCoconutPalmModel(col, scale);
+        palm.position.set(rx, 0, rz);
+        palm.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
+        group.add(palm);
+      }
+
+      return group;
+    }
+
+    // Default & Urban/Suburban/Forest Lollipop & Tropical Trees using InstancedMesh
+    const isForest = profile.treeProfile.primarySpecies === 'tropical_rainforest';
+    const canopyRadiusSmall = isForest ? 2.8 : 2.4;
+    const canopyRadiusLarge = isForest ? 4.2 : 3.6;
+
+    const canopyGeoSmall = new THREE.SphereGeometry(canopyRadiusSmall, 10, 10);
+    canopyGeoSmall.scale(1, isForest ? 1.5 : 1.35, 1);
+
+    const canopyGeoLarge = new THREE.SphereGeometry(canopyRadiusLarge, 10, 10);
+    canopyGeoLarge.scale(1, isForest ? 1.55 : 1.35, 1);
+
+    const colors = profile.treeProfile.canopyColors.map((c) => new THREE.Color(c));
+    const color1 = colors[0] || new THREE.Color('#8ed438');
+    const color2 = colors[1] || new THREE.Color('#aee848');
 
     const canopyMat = new THREE.MeshLambertMaterial();
-    const trunkMat = new THREE.MeshLambertMaterial({ color: '#8d6e63' });
+    const trunkMat = new THREE.MeshLambertMaterial({ color: isForest ? '#5c4033' : '#8d6e63' });
 
-    const trunkGeoSmall = new THREE.CylinderGeometry(0.3, 0.45, 3.2, 6);
-    const trunkGeoLarge = new THREE.CylinderGeometry(0.45, 0.65, 4.2, 6);
+    const trunkGeoSmall = new THREE.CylinderGeometry(0.3, 0.45, isForest ? 4.0 : 3.2, 6);
+    const trunkGeoLarge = new THREE.CylinderGeometry(0.45, 0.65, isForest ? 5.2 : 4.2, 6);
 
-    const shadowGeo = new THREE.CircleGeometry(1, 14);
+    const shadowGeo = new THREE.CircleGeometry(1, 12);
     const shadowMat = new THREE.MeshBasicMaterial({
       color: 0x224411,
       transparent: true,
@@ -57,42 +181,36 @@ export class SnapTreeGenerator {
 
     const dummy = new THREE.Object3D();
 
-
-
     for (let i = 0; i < treeCount; i++) {
       const seed = chunkX * 1000 + chunkZ * 100 + i;
       const rx = chunkX * chunkSize - chunkSize / 2 + seededRandom(seed) * chunkSize;
       const rz = chunkZ * chunkSize - chunkSize / 2 + seededRandom(seed + 1) * chunkSize;
 
-      // --- COLLISION DETECTION ---
-      // 4.5m clearance ensures canopy (radius 2.4-3.6m) does not overlap building walls or road curbs
+      // 4.5m clearance ensures canopy does not overlap building walls or road curbs
       if (obstacleMap.isBlocked(rx, rz, 4.5)) {
         continue;
       }
-      // ---------------------------
 
-      const isLarge = seededRandom(seed + 2) > 0.6;
+      const isLarge = seededRandom(seed + 2) > 0.55;
       const col = seededRandom(seed + 3) > 0.5 ? color1 : color2;
 
       if (isLarge) {
-        // Large: trunk 4.2m, canopy radius 3.6m * 1.35
-        dummy.position.set(rx, 2.1, rz);
+        dummy.position.set(rx, isForest ? 2.6 : 2.1, rz);
         dummy.updateMatrix();
         iTrunkLarge.setMatrixAt(largeIdx, dummy.matrix);
 
-        dummy.position.set(rx, 4.2 + 3.2, rz);
+        dummy.position.set(rx, (isForest ? 5.2 : 4.2) + 3.2, rz);
         dummy.updateMatrix();
         iCanopyLarge.setMatrixAt(largeIdx, dummy.matrix);
         iCanopyLarge.setColorAt(largeIdx, col);
 
         largeIdx++;
       } else {
-        // Small: trunk 3.2m, canopy radius 2.4m * 1.35
-        dummy.position.set(rx, 1.6, rz);
+        dummy.position.set(rx, isForest ? 2.0 : 1.6, rz);
         dummy.updateMatrix();
         iTrunkSmall.setMatrixAt(smallIdx, dummy.matrix);
 
-        dummy.position.set(rx, 3.2 + 2.2, rz);
+        dummy.position.set(rx, (isForest ? 4.0 : 3.2) + 2.2, rz);
         dummy.updateMatrix();
         iCanopySmall.setMatrixAt(smallIdx, dummy.matrix);
         iCanopySmall.setColorAt(smallIdx, col);
@@ -100,7 +218,6 @@ export class SnapTreeGenerator {
         smallIdx++;
       }
 
-      // Soft ground shadow
       const shadowRadius = isLarge ? 4.2 : 2.8;
       dummy.position.set(rx, 0.08, rz);
       dummy.rotation.x = -Math.PI / 2;

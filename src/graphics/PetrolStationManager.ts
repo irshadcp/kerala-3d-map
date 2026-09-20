@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { PetrolStationGenerator } from './PetrolStationGenerator';
 import { GeoCoords } from '../core/geoCoords';
+import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
 
 export interface PlacedStationInfo {
   name: string;
@@ -88,6 +89,15 @@ export class PetrolStationManager {
         const centerDist = road.buffer + 13.5;
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
+
+        // Kerala Zone Environmental Check
+        const zone = obstacleMap.getZoneAt(cx, cz, originLat, originLng);
+        const profile = ZoneProfileRegistry.get(zone);
+        if (!profile.allowedAssets.includes('petrol_station')) {
+          continue; // Forbidden in wetland, paddy, forest, coastal beaches
+        }
+
+        const minDistance = profile.spacing.petrolStation;
 
         // Check distance against existing stations
         const tooCloseCandidate = this.stationPositions.some(

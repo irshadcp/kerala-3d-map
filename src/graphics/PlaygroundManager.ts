@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SpatialObstacleMap } from './SpatialObstacleMap';
 import { PlaygroundGenerator } from './PlaygroundGenerator';
 import { GeoCoords } from '../core/geoCoords';
+import { ZoneProfileRegistry } from '../core/ZoneProfileRegistry';
 
 export interface PlacedPlaygroundInfo {
   name: string;
@@ -93,9 +94,18 @@ export class PlaygroundManager {
         const cx = midX + nx * centerDist;
         const cz = midZ + nz * centerDist;
 
+        // Kerala Zone Environmental Check
+        const zone = obstacleMap.getZoneAt(cx, cz, originLat, originLng);
+        const profile = ZoneProfileRegistry.get(zone);
+        if (!profile.allowedAssets.includes('playground')) {
+          continue;
+        }
+
+        const minDistance = profile.spacing.playground;
+
         // Check distance again from exact candidate position
         const tooCloseCandidate = this.playgroundPositions.some(
-          (pos) => Math.hypot(pos.x - cx, pos.z - cz) < this.MIN_PLAYGROUND_DISTANCE
+          (pos) => Math.hypot(pos.x - cx, pos.z - cz) < minDistance
         );
         if (tooCloseCandidate) continue;
 

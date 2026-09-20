@@ -281,7 +281,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
               chunkZ,
               this.CHUNK_SIZE,
               this.scene,
-              this.obstacleMap
+              this.obstacleMap,
+              this.originLat,
+              this.originLng
             );
             this.scene.add(chunkGroup);
             this.loadedChunks.set(key, chunkGroup);
