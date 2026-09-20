@@ -487,12 +487,12 @@ export class BuildingGenerator {
     // Level 2 (d2 to d3): Clean OSM 3D Box (solid extruded prism with exact footprint, lightweight)
     // Level 3 (d3+): Completely culled / empty (hidden in atmospheric horizon fog at distance)
     const lodDistances: Record<number, [number, number, number, number]> = {
-      5: [0, 180, 280, 520], // Major Landmark (Metro station, hospital, grand mall)
-      4: [0, 150, 240, 460], // Major POI (Supermarkets, banks, clinics)
-      3: [0, 130, 210, 400], // Commercial / shops / restaurants
-      2: [0, 110, 180, 360], // Road-facing residential / offices
-      1: [0, 90, 160, 320],  // Standard houses / residential
-      0: [0, 70, 130, 250],  // Background outbuildings / sheds
+      5: [0, 900, 1200, 10000], // Major Landmark
+      4: [0, 800, 1100, 10000], // Major POI
+      3: [0, 700, 1000, 10000], // Commercial
+      2: [0, 600, 900, 10000], // Road-facing
+      1: [0, 500, 800, 10000], // Standard houses
+      0: [0, 400, 700, 10000], // Background outbuildings
     };
     const [d0, d1, d2, d3] = lodDistances[importanceLevel] ?? lodDistances[1];
 

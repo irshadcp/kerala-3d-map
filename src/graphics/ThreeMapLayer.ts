@@ -144,7 +144,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     // Atmospheric distance fog matching open-world AAA games:
     // Softens distant 3D boxes into silhouettes and smoothly fades the horizon,
     // ensuring zero visual stutter or pop-in when looking into the distance
-    this.scene.fog = new THREE.Fog(0xd8edf7, 160, 500);
+    this.scene.fog = new THREE.Fog(0xd8edf7, 7500, 10000);
     this.renderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: gl,
@@ -239,12 +239,13 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.lastForwardFetchLat = centerLat;
     this.lastForwardFetchLng = centerLng;
 
-    // 1. Urban Core — large radius for dense city areas like Edappally, Kochi
-    this.realBuildingManager.fetchRealBuildings(centerLat, centerLng, 900);
+    // 1. Urban Core — large radius
+    this.realBuildingManager.fetchRealBuildings(centerLat, centerLng, 2500);
 
-    // 2. Eight directional quadrants (N, NE, E, SE, S, SW, W, NW) at 600m offset
-    const latOffset = 600 / 111000;
-    const lngOffset = 600 / (111000 * Math.cos((centerLat * Math.PI) / 180));
+    // 2. Eight directional quadrants (N, NE, E, SE, S, SW, W, NW) at 3000m offset
+    // This provides a massive ~5.5km seamless radius around the player
+    const latOffset = 3000 / 111000;
+    const lngOffset = 3000 / (111000 * Math.cos((centerLat * Math.PI) / 180));
 
     const quadrants = [
       { lat: centerLat + latOffset, lng: centerLng },                   // N
@@ -257,11 +258,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       { lat: centerLat + latOffset * 0.7, lng: centerLng - lngOffset * 0.7 }, // NW
     ];
 
-    // Stagger requests 300ms apart to avoid overwhelming Overpass API rate limits
+    // Stagger requests 600ms apart to avoid overwhelming Overpass API rate limits
     quadrants.forEach((q, idx) => {
       setTimeout(() => {
-        this.realBuildingManager.fetchRealBuildings(q.lat, q.lng, 650);
-      }, (idx + 1) * 300);
+        this.realBuildingManager.fetchRealBuildings(q.lat, q.lng, 2500);
+      }, (idx + 1) * 600);
     });
   }
 
@@ -562,24 +563,44 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
           const dfLat = (forwardCoords.lat - this.lastForwardFetchLat) * 111000;
           const dfLng = (forwardCoords.lng - this.lastForwardFetchLng) * 111000 * Math.cos((forwardCoords.lat * Math.PI) / 180);
-          if (Math.hypot(dfLat, dfLng) > 220) {
+          if (Math.hypot(dfLat, dfLng) > 1000) {
             this.lastForwardFetchLat = forwardCoords.lat;
             this.lastForwardFetchLng = forwardCoords.lng;
-            this.realBuildingManager.fetchRealBuildings(forwardCoords.lat, forwardCoords.lng, 650);
+            this.realBuildingManager.fetchRealBuildings(forwardCoords.lat, forwardCoords.lng, 2500);
           }
         }
 
         // 2. Active player neighborhood expansion
         const dLat = (center.lat - this.lastFetchLat) * 111000;
         const dLng = (center.lng - this.lastFetchLng) * 111000 * Math.cos((center.lat * Math.PI) / 180);
-        if (Math.hypot(dLat, dLng) > 250) {
+        if (Math.hypot(dLat, dLng) > 1000) {
           this.lastFetchLat = center.lat;
           this.lastFetchLng = center.lng;
-          this.realBuildingManager.fetchRealBuildings(center.lat, center.lng, 750);
+          this.realBuildingManager.fetchRealBuildings(center.lat, center.lng, 2500);
         }
       }
     }
 
+    // 1. First, synchronize camera world position for accurate Three.js LOD and raycasting
+    const pPos = this.characterController.getPosition();
+    let camX = pPos.x;
+    let camZ = pPos.z;
+    let altitude = 14;
+
+    if (this.map && (this.map as any).getFreeCameraOptions) {
+      const freeCam = (this.map as any).getFreeCameraOptions();
+      if (freeCam && freeCam.position) {
+        const lngLat = freeCam.position.toLngLat();
+        altitude = freeCam.position.toAltitude ? freeCam.position.toAltitude() : 14;
+        const local = GeoCoords.toLocalMeters(lngLat.lat, lngLat.lng, this.originLat, this.originLng);
+        camX = local.x;
+        camZ = local.z;
+      }
+    }
+    this.camera.position.set(camX, altitude, camZ);
+    this.camera.updateMatrixWorld();
+
+    // 2. Build MapLibre's view-projection matrix
     this._rotationX.makeRotationAxis(this._xAxis, this.modelTransform.rotateX);
     this._rotationY.makeRotationAxis(this._yAxis, this.modelTransform.rotateY);
     this._rotationZ.makeRotationAxis(this._zAxis, this.modelTransform.rotateZ);
@@ -602,26 +623,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       .multiply(this._rotationY)
       .multiply(this._rotationZ);
 
-    this.camera.projectionMatrix = this._m.multiply(this._l);
+    const maplibreVP = this._m.multiply(this._l);
 
-    // Synchronize camera world position for accurate Three.js LOD and raycasting
-    const pPos = this.characterController.getPosition();
-    let camX = pPos.x;
-    let camZ = pPos.z;
-    let altitude = 14;
-
-    if (this.map && (this.map as any).getFreeCameraOptions) {
-      const freeCam = (this.map as any).getFreeCameraOptions();
-      if (freeCam && freeCam.position) {
-        const lngLat = freeCam.position.toLngLat();
-        altitude = freeCam.position.toAltitude ? freeCam.position.toAltitude() : 14;
-        const local = GeoCoords.toLocalMeters(lngLat.lat, lngLat.lng, this.originLat, this.originLng);
-        camX = local.x;
-        camZ = local.z;
-      }
-    }
-    this.camera.position.set(camX, altitude, camZ);
-    this.camera.updateMatrixWorld();
+    // 3. Set camera.projectionMatrix to (MapLibreVP * camera.matrixWorld)
+    // This neutralizes the camera.matrixWorldInverse that WebGLRenderer applies automatically,
+    // ensuring the 3D scene aligns perfectly with the map while keeping camera.position intact for LODs.
+    this.camera.projectionMatrix.copy(maplibreVP).multiply(this.camera.matrixWorld);
 
     // In 2D overview mode (zoom < 15.0), suppress 3D Three.js objects for clean Google Maps view
     const currentZoom = this.map.getZoom();

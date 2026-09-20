@@ -491,7 +491,7 @@ export class TransitSystem {
     for (const [lat, lng] of TransitSystem.BLUE_LINE_BASELINE) {
       const { x, z } = GeoCoords.toLocalMeters(lat, lng, this.originLat, this.originLng);
       const distFromPlayer = Math.hypot(x, z);
-      if (distFromPlayer <= 3200) {
+      if (distFromPlayer <= 12000) {
         activePoints.push(new THREE.Vector3(x, VIADUCT_HEIGHT, z));
       }
     }
@@ -548,7 +548,7 @@ export class TransitSystem {
     for (const info of TransitSystem.KOCHI_METRO_STATIONS) {
       const { x: stX, z: stZ } = GeoCoords.toLocalMeters(info.lat, info.lng, this.originLat, this.originLng);
       const distFromPlayer = Math.hypot(stX, stZ);
-      if (distFromPlayer > 3200) continue;
+      if (distFromPlayer > 12000) continue;
 
       // Project station onto the nearest segment of the Blue Line viaduct geometry
       let bestDist = Infinity;

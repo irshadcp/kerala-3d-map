@@ -43,10 +43,10 @@ export class WorldChunkManager {
   /** Insertion-order tracking for LRU eviction */
   private cacheOrder: string[] = [];
   /** Max cached chunks before oldest are disposed */
-  private static readonly MAX_CACHE_SIZE = 64;
+  private static readonly MAX_CACHE_SIZE = 5500;
 
   private readonly chunkSize = 200;
-  private readonly stationaryRadius = 2; // 5x5 grid = 1.0 km x 1.0 km around player, distant skyline handled by MapLibre 3D
+  private readonly stationaryRadius = 35; // 71x71 grid = ~14 km x 14 km around player for 7km visibility
 
   private terrainEngine: TerrainEngine;
   private realBuildingManager: RealBuildingManager;
@@ -135,15 +135,34 @@ export class WorldChunkManager {
    * NOTE: New chunk geometry is queued (not built immediately) and processed by tick()
    * at most CHUNKS_PER_FRAME per frame to prevent main-thread hangs.
    */
+  private lastUpdateChunkX = -999;
+  private lastUpdateChunkZ = -999;
+  private lastUpdateSpeedMode = false;
+
   public update(playerX: number, playerZ: number, vx = 0, vz = 0) {
     const currentChunkX = Math.floor(playerX / this.chunkSize);
     const currentChunkZ = Math.floor(playerZ / this.chunkSize);
+    const speed = Math.hypot(vx, vz);
+    const isHighSpeed = speed > 2.5;
+
+    // Heavily optimized: Only re-evaluate the massive 71x71 chunk grid if player crosses into a new 200m chunk
+    // or drastically changes speed modes. This completely eliminates 60fps Javascript GC hangs!
+    if (
+      this.lastUpdateChunkX === currentChunkX &&
+      this.lastUpdateChunkZ === currentChunkZ &&
+      this.lastUpdateSpeedMode === isHighSpeed
+    ) {
+      return;
+    }
+
+    this.lastUpdateChunkX = currentChunkX;
+    this.lastUpdateChunkZ = currentChunkZ;
+    this.lastUpdateSpeedMode = isHighSpeed;
 
     const neededChunks: Set<string> = new Set();
-    const speed = Math.hypot(vx, vz);
 
     // MODE A: STATIONARY OR SLOW EXPLORATION (<= 2.5 m/s)
-    if (speed <= 2.5) {
+    if (!isHighSpeed) {
       for (let dx = -this.stationaryRadius; dx <= this.stationaryRadius; dx++) {
         for (let dz = -this.stationaryRadius; dz <= this.stationaryRadius; dz++) {
           const cx = currentChunkX + dx;
