@@ -54,28 +54,19 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public playerLng: number;
   public originElevation = 0;
   public currentElevation = 0;
+  private _tempLngLat = new maplibregl.LngLat(0, 0);
 
   public getTerrainElevation(lat: number, lng: number): number {
     if (!this.map) return 0;
     try {
-      if (typeof (this.map as any).queryTerrainElevation === 'function') {
-        const elev = (this.map as any).queryTerrainElevation([lng, lat]);
-        if (typeof elev === 'number' && !isNaN(elev)) {
-          return elev;
-        }
-      }
       const terrain = (this.map as any).terrain;
       if (terrain && typeof terrain.getElevationForLngLatZoom === 'function') {
-        const zoom = Math.min(14, Math.max(8, this.map.getZoom()));
-        const elev = terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lng, lat), zoom);
+        const tileZoom = (this.map as any).transform?.tileZoom ?? Math.floor(this.map.getZoom());
+        this._tempLngLat.lng = lng;
+        this._tempLngLat.lat = lat;
+        const elev = terrain.getElevationForLngLatZoom(this._tempLngLat, tileZoom);
         if (typeof elev === 'number' && !isNaN(elev)) {
           return elev;
-        }
-      }
-      if (typeof (this.map as any).getCameraTargetElevation === 'function') {
-        const targetElev = (this.map as any).getCameraTargetElevation();
-        if (typeof targetElev === 'number' && !isNaN(targetElev) && targetElev > 0) {
-          return targetElev;
         }
       }
     } catch (_) {}
@@ -862,11 +853,15 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     this._m.fromArray(matrix);
 
+    const terrainCenterElevation = (this.map as any)?.transform?.elevation || 0;
+    const mercatorPerMeter = this.modelTransform.scale;
+    const dynamicTranslateZ = (this.originElevation - terrainCenterElevation) * mercatorPerMeter;
+
     this._l
       .makeTranslation(
         this.modelTransform.translateX,
         this.modelTransform.translateY,
-        this.modelTransform.translateZ
+        dynamicTranslateZ
       )
       .scale(this._scaleVec)
       .multiply(this._rotationX)
