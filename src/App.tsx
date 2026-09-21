@@ -380,11 +380,12 @@ function App() {
         </div>
       </div>
 
-      {/* Floating Right Side Camera Controls: 2x, 5x, 10x, and Map */}
-      <div className="absolute right-3 top-20 sm:top-24 z-20 pointer-events-auto">
+      {/* Floating Right Side Camera Controls: 2x, 5x, 10x, Recenter, and Map */}
+      <div className="absolute right-3 top-18 sm:top-20 z-20 pointer-events-auto">
         <GamerCameraControls
           widenLevel={widenLevel}
           onWidenChange={handleWidenChange}
+          onRecenter={() => canvasRef.current?.recenterCamera()}
         />
       </div>
 

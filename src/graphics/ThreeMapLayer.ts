@@ -107,19 +107,19 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     });
     this.renderer.autoClear = false;
 
-    // Soft warm sunny lighting matching Snapchat Map
-    const ambientLight = new THREE.AmbientLight(0xfffdf7, 0.95);
+    // Crisp, balanced lighting for high-contrast 3D clarity
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
     this.scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffeedd, 0.85);
+    const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0xa7f3d0, 0.42);
     this.scene.add(hemiLight);
 
-    const topSunLight = new THREE.DirectionalLight(0xfffdf0, 0.9);
-    topSunLight.position.set(50, 300, 50);
+    const topSunLight = new THREE.DirectionalLight(0xfff8e7, 1.15);
+    topSunLight.position.set(100, 260, 90);
     this.scene.add(topSunLight);
 
-    // Subtle atmospheric distance depth fog matching Kerala pastel background
-    this.scene.fog = new THREE.Fog(0xe4f3de, 70, 240);
+    // Deep atmospheric distance horizon fog (near 180m, far 650m) keeping gameplay crisp
+    this.scene.fog = new THREE.Fog(0xdbeafe, 180, 650);
 
     // Grounded Realistic 3D Human Character (Deleted old floating pin badge)
     this.playerAvatarGroup = new THREE.Group();
@@ -390,12 +390,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (this.isDrivingState) {
       this.playerVehicle.setPosition(0, 0, 0);
       this.playerVehicle.setHeading(this.character.getHeading());
+      this.playerVehicle.setDriving(true);
       // Player is inside the auto: hide outer walking character model
       this.character.group.visible = false;
       this.localNameplate?.setDriving(true);
     } else {
       this.playerVehicle.setPosition(2.4, 0, 0);
       this.playerVehicle.setHeading(0);
+      this.playerVehicle.setDriving(false);
       // Player steps out on foot
       this.character.group.visible = true;
       this.character.group.position.set(0, 0, 0);

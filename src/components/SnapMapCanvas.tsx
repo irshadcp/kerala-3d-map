@@ -25,9 +25,9 @@ function escapeHtml(str: string): string {
 }
 
 export const WIDEN_CONFIG: Record<WidenLevel, { zoom: number; pitch: number; lookAhead: number; label: string; desc: string }> = {
-  '2x': { zoom: 20.6, pitch: 68, lookAhead: 4.0, label: '2x', desc: 'Wide 3D View' },
-  '5x': { zoom: 19.0, pitch: 50, lookAhead: 2.0, label: '5x', desc: 'Drone Overview' },
-  '10x': { zoom: 17.2, pitch: 30, lookAhead: 0, label: '10x', desc: 'Max Tactical View' },
+  '2x': { zoom: 20.2, pitch: 66, lookAhead: 4.5, label: '2x', desc: 'Close-up 3D View' },
+  '5x': { zoom: 19.0, pitch: 52, lookAhead: 3.0, label: '5x', desc: 'Drone Overview' },
+  '10x': { zoom: 17.2, pitch: 32, lookAhead: 0, label: '10x', desc: 'Max Tactical View' },
   'map': { zoom: 11.5, pitch: 0, lookAhead: 0, label: '🗺️', desc: '2D Tactical Map' },
 };
 
@@ -40,9 +40,9 @@ export const getTargetCenter = (
   lat: number,
   lng: number,
   bearing: number,
-  widen: WidenLevel
+  widen: WidenLevel | number
 ): [number, number] => {
-  const lookAhead = WIDEN_CONFIG[widen]?.lookAhead || 0;
+  const lookAhead = typeof widen === 'number' ? widen : (WIDEN_CONFIG[widen]?.lookAhead || 0);
   if (lookAhead <= 0) {
     return [lng, lat];
   }
@@ -55,6 +55,7 @@ export const getTargetCenter = (
 export interface SnapMapCanvasRef {
   toggle3D: () => boolean;
   recenter: () => void;
+  recenterCamera: () => void;
   rotateBy: (degrees: number) => void;
   resetRotation: () => void;
   toggleRotateMode: () => boolean;
@@ -92,6 +93,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
     const is3DRef = useRef<boolean>(true);
     const isRotateModeRef = useRef<boolean>(false);
     const isManualInteractingRef = useRef<boolean>(false);
+    const lastManualLookTimeRef = useRef<number>(0);
     const isTeleportingRef = useRef<boolean>(false);
     const widenLevelRef = useRef<WidenLevel>('2x');
     const tierRef = useRef<PerformanceTier>(detectDeviceTier());
@@ -99,6 +101,47 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       lat: currentLocation.lat,
       lng: currentLocation.lng,
     });
+
+    const syncMarkerVisibility = (isMapMode: boolean) => {
+      const display = isMapMode ? 'block' : 'none';
+      if (localMarkerRef.current) {
+        localMarkerRef.current.getElement().style.display = display;
+      }
+      for (const marker of remoteMarkersRef.current.values()) {
+        marker.getElement().style.display = display;
+      }
+    };
+
+    /**
+     * In Map View: Shows ONLY clean main highways & trunk corridors, eliminating minor road/building clutter.
+     */
+    const updateMapRoadsMode = (isMapMode: boolean) => {
+      if (!map.current) return;
+      const mapInst = map.current;
+      try {
+        if (mapInst.getLayer('road_minor')) {
+          mapInst.setLayoutProperty('road_minor', 'visibility', isMapMode ? 'none' : 'visible');
+        }
+        if (mapInst.getLayer('road_major_lanes')) {
+          mapInst.setLayoutProperty('road_major_lanes', 'visibility', isMapMode ? 'none' : 'visible');
+        }
+        if (mapInst.getLayer('road_major_center')) {
+          mapInst.setLayoutProperty('road_major_center', 'visibility', isMapMode ? 'none' : 'visible');
+        }
+        if (mapInst.getLayer('2d-buildings')) {
+          mapInst.setLayoutProperty('2d-buildings', 'visibility', isMapMode ? 'none' : 'visible');
+        }
+        if (mapInst.getLayer('road_label')) {
+          mapInst.setLayoutProperty('road_label', 'visibility', isMapMode ? 'none' : 'visible');
+        }
+        if (mapInst.getLayer('road_major')) {
+          mapInst.setFilter('road_major', ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], true, false]);
+        }
+        if (mapInst.getLayer('road_major_casing')) {
+          mapInst.setFilter('road_major_casing', ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], true, false]);
+        }
+      } catch (_) {}
+    };
 
     // Keep local 3D nameplate voice and profile state in sync
     useEffect(() => {
@@ -127,6 +170,24 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         });
         return is3DRef.current;
       },
+      recenterCamera: () => {
+        if (!map.current || !threeLayer.current) return;
+        const pLat = threeLayer.current.playerLat;
+        const pLng = threeLayer.current.playerLng;
+        const heading = threeLayer.current.character.getHeading();
+        const compassDeg = Math.round(((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360);
+        const isDriving = threeLayer.current.isDriving();
+        const cfg = WIDEN_CONFIG[widenLevelRef.current] || WIDEN_CONFIG['2x'];
+        const lookAhead = isDriving ? 7.5 : (cfg.lookAhead || 4.5);
+        const targetPitch = isDriving ? 64 : cfg.pitch;
+        const targetCenter = getTargetCenter(pLat, pLng, compassDeg, lookAhead);
+        map.current.easeTo({
+          center: targetCenter,
+          bearing: compassDeg,
+          pitch: targetPitch,
+          duration: 600,
+        });
+      },
       recenter: () => {
         if (!map.current) return;
         const lat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
@@ -141,15 +202,19 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         } else {
           is3DRef.current = true;
           threeLayer.current?.set3DMode(true);
-          const bearing = map.current.getBearing();
-          const zoom = WIDEN_CONFIG[widenLevelRef.current].zoom;
-          const pitch = WIDEN_CONFIG[widenLevelRef.current].pitch;
-          const targetCenter = getTargetCenter(lat, lng, bearing, widenLevelRef.current);
+          const heading = threeLayer.current ? threeLayer.current.character.getHeading() : 0;
+          const compassDeg = Math.round(((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360);
+          const isDriving = threeLayer.current ? threeLayer.current.isDriving() : false;
+          const cfg = WIDEN_CONFIG[widenLevelRef.current];
+          const lookAhead = isDriving ? 7.5 : (cfg.lookAhead || 4.5);
+          const pitch = isDriving ? 64 : cfg.pitch;
+          const targetCenter = getTargetCenter(lat, lng, compassDeg, lookAhead);
           map.current.flyTo({
             center: targetCenter,
-            zoom,
+            zoom: cfg.zoom,
             pitch,
-            duration: 1000,
+            bearing: compassDeg,
+            duration: 800,
           });
         }
       },
@@ -181,6 +246,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           isTeleportingRef.current = true;
           is3DRef.current = false;
           threeLayer.current?.set3DMode(false);
+          syncMarkerVisibility(true);
+          updateMapRoadsMode(true);
           map.current.dragPan.enable();
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
@@ -196,6 +263,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         } else {
           isTeleportingRef.current = true;
           is3DRef.current = true;
+          syncMarkerVisibility(false);
+          updateMapRoadsMode(false);
           map.current.dragPan.disable();
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
@@ -208,14 +277,18 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             threeLayer.current.set3DMode(true);
           }
 
-          const bearing = map.current.getBearing();
-          const targetCenter = getTargetCenter(pLat, pLng, bearing, level);
+          const heading = threeLayer.current ? threeLayer.current.character.getHeading() : 0;
+          const compassDeg = Math.round(((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360);
+          const isDriving = threeLayer.current ? threeLayer.current.isDriving() : false;
+          const lookAhead = isDriving ? 7.5 : (cfg.lookAhead || 4.5);
+          const pitch = isDriving ? 64 : cfg.pitch;
+          const targetCenter = getTargetCenter(pLat, pLng, compassDeg, lookAhead);
 
           map.current.flyTo({
             center: targetCenter,
             zoom: cfg.zoom,
-            pitch: cfg.pitch,
-            bearing,
+            pitch,
+            bearing: compassDeg,
             duration: 700,
           });
 
@@ -240,6 +313,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         if (zoom >= 16.2) {
           is3DRef.current = true;
           threeLayer.current?.set3DMode(true);
+          syncMarkerVisibility(false);
         }
         const pitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
         map.current.flyTo({
@@ -254,24 +328,25 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         isTeleportingRef.current = true;
         playerCoordsRef.current = { lat, lng };
 
-        // Always lock into 2x 3D View (zoom: 20.6, pitch: 68) when going to a player!
+        // Always lock into 2x 3D View when going to a player
         widenLevelRef.current = '2x';
         is3DRef.current = true;
         threeLayer.current.set3DMode(true);
+        syncMarkerVisibility(false);
         map.current.dragPan.disable();
         threeLayer.current.setOrigin(lat, lng);
         threeLayer.current.updatePlayerPosition(lat, lng, true);
 
         const cfg = WIDEN_CONFIG['2x'];
-        const bearing = map.current.getBearing();
-        const targetCenter = getTargetCenter(lat, lng, bearing, '2x');
+        const heading = threeLayer.current.character.getHeading();
+        const compassDeg = Math.round(((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360);
+        const targetCenter = getTargetCenter(lat, lng, compassDeg, cfg.lookAhead);
 
-        // Instant snappy jump directly to the player's side in full 2x 3D view
         map.current.jumpTo({
           center: targetCenter,
           zoom: cfg.zoom,
           pitch: cfg.pitch,
-          bearing,
+          bearing: compassDeg,
         });
 
         if (localMarkerRef.current) {
@@ -281,8 +356,6 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         threeLayer.current.updatePlayerPosition(lat, lng, true);
         map.current.triggerRepaint();
 
-        // Keep isTeleportingRef true for 600ms so any asynchronous React currentLocation updates
-        // do not trigger a slow map.current.flyTo tween over our instant teleport!
         setTimeout(() => {
           isTeleportingRef.current = false;
         }, 600);
@@ -310,15 +383,33 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             }
           }
 
-          // Rock-solid camera follow locked to character position in 3D
-          if (map.current && !isManualInteractingRef.current && widenLevelRef.current !== 'map') {
+          // True TPP camera follow locked to character and vehicle
+          if (map.current && widenLevelRef.current !== 'map') {
             const currentBearing = map.current.getBearing();
-            const basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
-            const targetCenter = getTargetCenter(pLat, pLng, currentBearing, widenLevelRef.current);
+            let newBearing = currentBearing;
+            const isDriving = threeLayer.current.isDriving();
+            const now = performance.now();
+
+            // Smoothly align camera behind character/vehicle when not actively swiping
+            if (!isManualInteractingRef.current && (now - lastManualLookTimeRef.current) > 350) {
+              let diff = compassDeg - currentBearing;
+              while (diff < -180) diff += 360;
+              while (diff > 180) diff -= 360;
+
+              const turnSpeed = isDriving ? 6.5 : 4.8;
+              const turnFactor = Math.min(1.0, delta * turnSpeed);
+              newBearing = Math.abs(diff) > 0.05
+                ? (currentBearing + diff * turnFactor + 360) % 360
+                : currentBearing;
+            }
+
+            const basePitch = isDriving ? 64 : (is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0);
+            const lookAheadMeters = isDriving ? 7.5 : (WIDEN_CONFIG[widenLevelRef.current]?.lookAhead || 4.5);
+            const targetCenter = getTargetCenter(pLat, pLng, newBearing, lookAheadMeters);
 
             map.current.jumpTo({
               center: targetCenter,
-              bearing: currentBearing,
+              bearing: newBearing,
               pitch: basePitch,
             });
           }
@@ -351,6 +442,24 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             res
           );
         }
+        // Smoothly adapt camera between walking and driving view
+        if (map.current && widenLevelRef.current === '2x') {
+          const pLat = threeLayer.current.playerLat;
+          const pLng = threeLayer.current.playerLng;
+          const heading = threeLayer.current.character.getHeading();
+          const compassDeg = Math.round(((Math.atan2(Math.sin(heading), -Math.cos(heading)) * 180 / Math.PI) + 360) % 360);
+          const lookAhead = res ? 7.5 : 4.5;
+          const pitch = res ? 64 : 66;
+          const zoom = res ? 19.8 : 20.2;
+          const targetCenter = getTargetCenter(pLat, pLng, compassDeg, lookAhead);
+          map.current.easeTo({
+            center: targetCenter,
+            bearing: compassDeg,
+            pitch,
+            zoom,
+            duration: 600,
+          });
+        }
         return res;
       },
       setPerformanceTier: (tier: PerformanceTier) => {
@@ -379,7 +488,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
       },
     }));
 
-    // Smooth dedicated camera follow loop for tap-to-walk (independent of WebGL render)
+    // Smooth dedicated camera follow loop for tap-to-walk & settle
     useEffect(() => {
       let animId: number;
       let lastTime = performance.now();
@@ -417,17 +526,24 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             );
           }
 
-          if (moved && !isManualInteractingRef.current && widenLevelRef.current !== 'map') {
+          if (moved && widenLevelRef.current !== 'map') {
             const currentBearing = map.current.getBearing();
-            let diff = compassDeg - currentBearing;
-            while (diff < -180) diff += 360;
-            while (diff > 180) diff -= 360;
+            let newBearing = currentBearing;
+            const isDriving = threeLayer.current.isDriving();
 
-            const turnRate = 0.045;
-            const newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnRate + 360) % 360 : currentBearing;
+            if (!isManualInteractingRef.current && (now - lastManualLookTimeRef.current) > 350) {
+              let diff = compassDeg - currentBearing;
+              while (diff < -180) diff += 360;
+              while (diff > 180) diff -= 360;
 
-            const basePitch = is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0;
-            const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current);
+              const turnSpeed = isDriving ? 5.5 : 4.0;
+              const turnFactor = Math.min(1.0, delta * turnSpeed);
+              newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnFactor + 360) % 360 : currentBearing;
+            }
+
+            const basePitch = isDriving ? 64 : (is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0);
+            const lookAhead = isDriving ? 7.5 : (WIDEN_CONFIG[widenLevelRef.current]?.lookAhead || 4.5);
+            const targetCenter = getTargetCenter(pLat, pLng, newBearing, lookAhead);
             map.current.jumpTo({
               center: targetCenter,
               bearing: newBearing,
@@ -511,6 +627,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             layer.setLocalProfile(localPlayer.name, localPlayer.district);
           }
           layer.setLocalVoiceState(!!isMuted, !!isSpeaking);
+          syncMarkerVisibility(widenLevelRef.current === 'map');
+          updateMapRoadsMode(widenLevelRef.current === 'map');
         });
 
         // Dynamic 2D/3D zoom sync on manual user zoom end
@@ -525,9 +643,13 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           if (isCloseEnoughFor3D && !is3DRef.current) {
             is3DRef.current = true;
             threeLayer.current?.set3DMode(true);
+            syncMarkerVisibility(false);
+            updateMapRoadsMode(false);
           } else if (!isCloseEnoughFor3D && is3DRef.current) {
             is3DRef.current = false;
             threeLayer.current?.set3DMode(false);
+            syncMarkerVisibility(true);
+            updateMapRoadsMode(true);
           }
         };
 
@@ -549,7 +671,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           }
         });
 
-        // Mobile & Desktop Swipe-to-Rotate Look-Around in 3D
+        // Mobile & Desktop Swipe-to-Rotate Look-Around in 3D (Right-Thumb & Upper screen orbit zone)
         let isRotating = false;
         let startX = 0;
         let startY = 0;
@@ -560,8 +682,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
         const onPointerDown = (e: PointerEvent) => {
           if (!map.current || !is3DRef.current) return;
-          // Ignore if pointer is inside the bottom-left joystick area
-          const isJoystickZone = e.clientX < 165 && e.clientY > window.innerHeight - 230;
+          // Ignore if pointer is inside the bottom-left virtual joystick zone
+          const isJoystickZone =
+            e.clientX < Math.min(window.innerWidth * 0.48, 240) &&
+            e.clientY > window.innerHeight - Math.min(window.innerHeight * 0.40, 280);
           if (isJoystickZone) return;
 
           isRotating = true;
@@ -586,7 +710,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
-          const targetCenter = getTargetCenter(pLat, pLng, newBearing, widenLevelRef.current);
+          const isDriving = threeLayer.current ? threeLayer.current.isDriving() : false;
+          const lookAhead = isDriving ? 7.5 : (WIDEN_CONFIG[widenLevelRef.current]?.lookAhead || 4.5);
+          const targetCenter = getTargetCenter(pLat, pLng, newBearing, lookAhead);
 
           map.current.jumpTo({
             center: targetCenter,
@@ -598,9 +724,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const onPointerUp = (e: PointerEvent) => {
           if (!isRotating) return;
           isRotating = false;
+          lastManualLookTimeRef.current = performance.now();
           setTimeout(() => {
             setManualInteraction(false);
-          }, 150);
+          }, 300);
           try {
             container.releasePointerCapture(e.pointerId);
           } catch (_) {}
@@ -657,6 +784,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             el.className = 'snap-player-marker';
             el.style.cursor = 'pointer';
             el.style.pointerEvents = 'auto';
+            el.style.display = widenLevelRef.current === 'map' ? 'block' : 'none';
 
             el.innerHTML = `
               <div style="display: flex; flex-direction: column; align-items: center; user-select: none; transform: translateY(-4px); transition: transform 0.2s ease;">
@@ -700,6 +828,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
             (marker as any).__playerData = player;
             marker.setLngLat([player.lng, player.lat]);
             const el = marker.getElement();
+            el.style.display = widenLevelRef.current === 'map' ? 'block' : 'none';
             const nameEl = el.querySelector('.p-name');
             if (nameEl && nameEl.textContent !== player.name) {
               nameEl.textContent = player.name;
@@ -762,6 +891,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         const el = document.createElement('div');
         el.className = 'snap-local-marker';
         el.style.pointerEvents = 'none';
+        el.style.display = widenLevelRef.current === 'map' ? 'block' : 'none';
 
         el.innerHTML = `
           <div style="display: flex; flex-direction: column; align-items: center; user-select: none; transform: translateY(-4px);">
@@ -787,6 +917,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           .addTo(mapInst);
       } else {
         localMarkerRef.current.setLngLat([pLng, pLat]);
+        localMarkerRef.current.getElement().style.display = widenLevelRef.current === 'map' ? 'block' : 'none';
         const arrowEl = localMarkerRef.current.getElement().querySelector('.heading-arrow') as HTMLElement | null;
         if (arrowEl) {
           arrowEl.style.transform = `rotate(${compassDeg}deg)`;

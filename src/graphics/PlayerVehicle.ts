@@ -22,6 +22,7 @@ export class PlayerVehicle {
   private rearRightWheel!: THREE.Mesh;
   private frontWheelMesh!: THREE.Mesh;
   private headlightMesh!: THREE.Mesh;
+  public driverGroup!: THREE.Group;
   private driverSeatOffset = new THREE.Vector3(0, 0.55, 0.05);
 
   // Orientation & Animation state
@@ -170,6 +171,58 @@ export class PlayerVehicle {
     shadow.position.y = 0.02;
     this.group.add(shadow);
 
+    // 9. Seated Authentic Kerala Driver (Active when driving)
+    this.driverGroup = new THREE.Group();
+    this.driverGroup.position.set(0, 0.58, 0.15);
+
+    const driverSkinMat = new THREE.MeshLambertMaterial({ color: 0xd97706 });
+    const driverHairMat = new THREE.MeshLambertMaterial({ color: 0x1c1917 });
+    const driverShirtMat = new THREE.MeshLambertMaterial({ color: 0x047857 }); // Emerald green polo
+    const driverPantsMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+    const driverShadesMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+
+    // Driver Torso
+    const dTorsoGeo = new THREE.BoxGeometry(0.55, 0.52, 0.3);
+    const dTorso = new THREE.Mesh(dTorsoGeo, driverShirtMat);
+    dTorso.position.y = 0.28;
+    this.driverGroup.add(dTorso);
+
+    // Driver Head
+    const dHeadGeo = new THREE.BoxGeometry(0.32, 0.36, 0.32);
+    const dHead = new THREE.Mesh(dHeadGeo, driverSkinMat);
+    dHead.position.set(0, 0.68, 0);
+    this.driverGroup.add(dHead);
+
+    // Hair
+    const dHairGeo = new THREE.BoxGeometry(0.34, 0.12, 0.34);
+    const dHair = new THREE.Mesh(dHairGeo, driverHairMat);
+    dHair.position.set(0, 0.85, -0.02);
+    this.driverGroup.add(dHair);
+
+    // Aviator Sunglasses
+    const dShadesGeo = new THREE.BoxGeometry(0.32, 0.1, 0.08);
+    const dShades = new THREE.Mesh(dShadesGeo, driverShadesMat);
+    dShades.position.set(0, 0.70, 0.16);
+    this.driverGroup.add(dShades);
+
+    // Arms holding handlebars & seated thighs
+    for (const side of [-1, 1]) {
+      const armGeo = new THREE.BoxGeometry(0.12, 0.12, 0.45);
+      const arm = new THREE.Mesh(armGeo, driverShirtMat);
+      arm.position.set(side * 0.28, 0.32, 0.24);
+      arm.rotation.x = -0.3;
+      arm.rotation.y = -side * 0.15;
+      this.driverGroup.add(arm);
+
+      const legGeo = new THREE.BoxGeometry(0.18, 0.18, 0.42);
+      const leg = new THREE.Mesh(legGeo, driverPantsMat);
+      leg.position.set(side * 0.18, 0.04, 0.22);
+      this.driverGroup.add(leg);
+    }
+
+    this.driverGroup.visible = false;
+    this.group.add(this.driverGroup);
+
     this.driverSeatOffset.set(0, 0.48, 0.1);
   }
 
@@ -275,7 +328,12 @@ export class PlayerVehicle {
     this.currentHeading += angleDiff * Math.min(1.0, delta * 12.0);
     this.group.rotation.y = this.currentHeading;
 
-    // 2. Wheel rotation and steering
+    // 2. Driver model visibility inside vehicle
+    if (this.driverGroup) {
+      this.driverGroup.visible = isDriving;
+    }
+
+    // 3. Wheel rotation and steering
     if (isMoving && isDriving) {
       const rollRate = delta * speed * 8.0;
       this.wheelRotation -= rollRate;
@@ -295,6 +353,12 @@ export class PlayerVehicle {
       if (this.frontWheelGroup) {
         this.frontWheelGroup.rotation.y = this.steerAngle;
       }
+    }
+  }
+
+  public setDriving(isDriving: boolean) {
+    if (this.driverGroup) {
+      this.driverGroup.visible = isDriving;
     }
   }
 

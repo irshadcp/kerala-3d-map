@@ -173,15 +173,15 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="absolute bottom-0 left-0 w-[calc(100%-85px)] sm:w-[calc(100%-110px)] h-[44vh] sm:h-[40vh] pointer-events-auto touch-none select-none z-20"
+      className="absolute bottom-0 left-0 w-[46vw] max-w-[230px] h-[38vh] max-h-[260px] pointer-events-auto touch-none select-none z-20"
       style={{ touchAction: 'none' }}
     >
-      {/* Joystick Base Ring - Centered at bottom when resting, or floating dynamically under thumb when active */}
+      {/* Ergonomic Bottom-Left Mobile Joystick */}
       <div
-        className={`absolute rounded-full border border-white/50 shadow-2xl flex items-center justify-center transition-opacity duration-200 pointer-events-none ${
+        className={`absolute rounded-full border shadow-2xl flex items-center justify-center transition-all duration-150 pointer-events-none ${
           isActive
-            ? 'w-24 h-24 sm:w-28 sm:h-28 bg-slate-900/65 backdrop-blur-md ring-2 ring-emerald-400/70 opacity-100'
-            : 'w-20 h-20 sm:w-22 sm:h-22 bg-slate-900/40 backdrop-blur-sm opacity-60'
+            ? 'w-24 h-24 sm:w-28 sm:h-28 bg-slate-900/75 backdrop-blur-md ring-2 ring-emerald-400/80 border-emerald-400/50 opacity-100 scale-105'
+            : 'w-20 h-20 sm:w-22 sm:h-22 bg-slate-900/45 backdrop-blur-sm border-white/40 opacity-70 hover:opacity-90'
         }`}
         style={
           basePos
@@ -191,24 +191,26 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
                 transform: 'translate(-50%, -50%)',
               }
             : {
-                left: '50%',
-                bottom: '22px',
-                transform: 'translateX(-50%)',
+                left: '68px',
+                bottom: '48px',
+                transform: 'translate(-50%, 50%)',
               }
         }
       >
-        {/* Crosshair indicators */}
-        <div className="absolute w-full h-[1px] bg-white/20 pointer-events-none" />
-        <div className="absolute h-full w-[1px] bg-white/20 pointer-events-none" />
+        {/* Subtle directional indicators */}
+        <span className="absolute top-1.5 text-[9px] font-black text-white/40 select-none">▲</span>
+        <span className="absolute bottom-1.5 text-[9px] font-black text-white/40 select-none">▼</span>
+        <span className="absolute left-1.5 text-[9px] font-black text-white/40 select-none">◀</span>
+        <span className="absolute right-1.5 text-[9px] font-black text-white/40 select-none">▶</span>
 
         {/* Center Thumb Knob */}
         <div
-          className="absolute w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 shadow-lg border-2 border-emerald-500 flex items-center justify-center pointer-events-none transition-transform ease-out duration-75"
+          className="absolute w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-tr from-white to-gray-100 shadow-xl border-2 border-emerald-500 flex items-center justify-center pointer-events-none transition-transform ease-out duration-75"
           style={{
             transform: `translate3d(${knobPos.x}px, ${knobPos.y}px, 0)`,
           }}
         >
-          <div className="w-3 h-3 rounded-full bg-emerald-600 shadow-inner" />
+          <div className="w-3.5 h-3.5 rounded-full bg-emerald-600 shadow-inner" />
         </div>
       </div>
     </div>
