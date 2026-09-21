@@ -236,11 +236,19 @@
           ["zoom"],
           16.2, 0,
           16.6, [
-            "coalesce",
-            ["get", "render_height"],
-            ["get", "height"],
-            ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 1.5], 4.2],
-            9.5
+            "max",
+            [
+              "+",
+              [
+                "coalesce",
+                ["get", "render_height"],
+                ["get", "height"],
+                ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 1.5], 4.2],
+                10.0
+              ],
+              8.0
+            ],
+            18.0
           ]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],

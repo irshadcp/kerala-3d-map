@@ -81,11 +81,11 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   public onTerrainLoaded() {
     const originElev = this.getTerrainElevation(this.originLat, this.originLng);
-    if (originElev !== this.originElevation && originElev !== 0) {
+    if (originElev !== this.originElevation) {
       this.originElevation = originElev;
       this.updateModelTransform(this.originLat, this.originLng);
-      this.refreshSceneElevations();
     }
+    this.refreshSceneElevations();
   }
 
   public refreshSceneElevations() {
@@ -98,19 +98,21 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
 
     if (this.is3DActive) {
-      // 1. Clear & regenerate tree chunks with elevation sampling
+      // 1. In-place instant elevation re-snap for all trees in loaded chunks
       for (const group of this.loadedChunks.values()) {
-        this.threeDGroup.remove(group);
-        group.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh;
-            mesh.geometry?.dispose();
+        for (const child of group.children) {
+          const u = child.userData;
+          if (u && typeof u.localX === 'number' && typeof u.localZ === 'number') {
+            const elev = this.getElevationAtLocal(u.localX, u.localZ);
+            child.position.y = elev - 0.2;
           }
-        });
+        }
       }
-      this.loadedChunks.clear();
+
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
-      this.updateChunks(local.x, local.z);
+      if (this.loadedChunks.size === 0) {
+        this.updateChunks(local.x, local.z);
+      }
 
       // 2. Re-evaluate landmark managers with elevation sampling
       const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
@@ -155,6 +157,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private LOAD_RADIUS = 180; // Adaptive: 120m in low-end mode, 180m in high mode
   private lastRegenX = -9999;
   private lastRegenZ = -9999;
+  private _lastElevCheck = 0;
 
   // Pre-allocated matrices for render loop
   private _m = new THREE.Matrix4();
@@ -788,17 +791,18 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public render(_gl: any, matrix: any) {
     if (!this.scene || !this.camera) return;
 
-    // Check if DEM terrain tiles finished loading after startup
-    if (this.originElevation === 0) {
+    const now = performance.now();
+
+    // Periodic DEM elevation check (every 400ms) to ensure background DEM tile downloads sync immediately
+    if (now - this._lastElevCheck > 400) {
+      this._lastElevCheck = now;
       const originElev = this.getTerrainElevation(this.originLat, this.originLng);
-      if (originElev !== 0) {
+      if (originElev !== this.originElevation) {
         this.originElevation = originElev;
         this.updateModelTransform(this.originLat, this.originLng);
         this.refreshSceneElevations();
       }
     }
-
-    const now = performance.now();
     const delta = Math.min(0.05, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
 

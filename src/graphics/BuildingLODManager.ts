@@ -111,6 +111,13 @@ export class BuildingLODManager {
           this.container.add(item.group);
           this.activeBuildings.set(key, item);
         }
+      } else if (getElevation) {
+        const item = this.activeBuildings.get(key);
+        if (item) {
+          const centerX = (b.minX + b.maxX) * 0.5;
+          const centerZ = (b.minZ + b.maxZ) * 0.5;
+          item.group.position.y = getElevation(centerX, centerZ);
+        }
       }
     }
 
@@ -157,8 +164,8 @@ export class BuildingLODManager {
       groundMesh.scale.set(1.06, 1, 1.06); // subtle outward soft margin
       group.add(groundMesh);
 
-      // 2. High-Fidelity Roof Parapet Cornice Cap
-      const roofHeight = Math.max(3.2, b.height);
+      // 2. High-Fidelity Roof Parapet Cornice Cap (aligned with 18m minimum fill-extrusion)
+      const roofHeight = Math.max(18.0, (b.height || 8.0) + 8.0);
       const roofMat = b.isCommercial ? this.commercialRoofMat : this.terracottaRoofMat;
 
       if (this.isPerformanceMode) {

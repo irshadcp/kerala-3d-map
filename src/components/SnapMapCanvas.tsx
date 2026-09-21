@@ -685,13 +685,19 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           updateMapRoadsMode(widenLevelRef.current === 'map');
         });
 
-        // When terrain tiles load, snap 3D player, vehicle, and all scene objects to true ground elevation
-        mapInstance.on('terrain', () => {
+        // When terrain tiles load or DEM raster tiles arrive over network, snap all 3D objects to true ground elevation
+        const onTerrainUpdate = () => {
           if (threeLayer.current) {
             threeLayer.current.onTerrainLoaded();
             const pLat = threeLayer.current.playerLat;
             const pLng = threeLayer.current.playerLng;
             threeLayer.current.updatePlayerPosition(pLat, pLng, false);
+          }
+        };
+        mapInstance.on('terrain', onTerrainUpdate);
+        mapInstance.on('sourcedata', (e: any) => {
+          if (e.sourceId === 'terrainSource') {
+            onTerrainUpdate();
           }
         });
 

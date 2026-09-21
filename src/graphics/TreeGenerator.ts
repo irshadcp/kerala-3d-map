@@ -858,10 +858,14 @@ export class SnapTreeGenerator {
         }
       }
 
-      // Sample exact terrain elevation
-      const treeY = getElevation ? getElevation(rx, rz) : 0;
+      // Sample exact terrain elevation (anchoring 0.2m into soil so downhill slope roots never hover)
+      const treeY = (getElevation ? getElevation(rx, rz) : 0) - 0.2;
       treeModel.position.set(rx, treeY, rz);
       treeModel.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
+      treeModel.userData = {
+        localX: rx,
+        localZ: rz,
+      };
       group.add(treeModel);
     }
 
