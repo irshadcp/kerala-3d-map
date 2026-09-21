@@ -897,15 +897,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     this._m.fromArray(matrix);
 
-    const terrainCenterElevation = (this.map as any)?.transform?.elevation || 0;
     const mercatorPerMeter = this.modelTransform.scale;
-    const dynamicTranslateZ = (this.originElevation - terrainCenterElevation) * mercatorPerMeter;
+    const translateZ = this.originElevation * mercatorPerMeter;
 
     this._l
       .makeTranslation(
         this.modelTransform.translateX,
         this.modelTransform.translateY,
-        dynamicTranslateZ
+        translateZ
       )
       .scale(this._scaleVec)
       .multiply(this._rotationX)
