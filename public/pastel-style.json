@@ -4,7 +4,20 @@
     "openmaptiles": {
       "type": "vector",
       "url": "https://tiles.openfreemap.org/planet"
+    },
+    "terrainSource": {
+      "type": "raster-dem",
+      "tiles": [
+        "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+      ],
+      "encoding": "terrarium",
+      "tileSize": 256,
+      "maxzoom": 15
     }
+  },
+  "terrain": {
+    "source": "terrainSource",
+    "exaggeration": 1.25
   },
   "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   "light": {
@@ -19,6 +32,17 @@
       "type": "background",
       "paint": {
         "background-color": "#dcfce7"
+      }
+    },
+    {
+      "id": "hills",
+      "type": "hillshade",
+      "source": "terrainSource",
+      "paint": {
+        "hillshade-shadow-color": "#064e3b",
+        "hillshade-highlight-color": "#fef9c3",
+        "hillshade-accent-color": "#059669",
+        "hillshade-exaggeration": 0.45
       }
     },
     {

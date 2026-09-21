@@ -52,6 +52,29 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public originLng: number;
   public playerLat: number;
   public playerLng: number;
+  public originElevation = 0;
+  public currentElevation = 0;
+
+  public getTerrainElevation(lat: number, lng: number): number {
+    if (!this.map) return 0;
+    try {
+      const terrain = (this.map as any).terrain;
+      if (terrain && typeof terrain.getElevationForLngLatZoom === 'function') {
+        const zoom = Math.min(14, Math.max(8, this.map.getZoom()));
+        const elev = terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lng, lat), zoom);
+        if (typeof elev === 'number' && !isNaN(elev)) {
+          return elev;
+        }
+      }
+      if (typeof (this.map as any).getCameraTargetElevation === 'function') {
+        const targetElev = (this.map as any).getCameraTargetElevation();
+        if (typeof targetElev === 'number' && !isNaN(targetElev) && targetElev > 0) {
+          return targetElev;
+        }
+      }
+    } catch (_) {}
+    return 0;
+  }
 
   private modelTransform = {
     translateX: 0,
@@ -267,13 +290,17 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.targetPos.set(local.x, local.z);
     this.isWalking = true;
 
+    const groundElev = this.getTerrainElevation(lat, lng);
+    const yOffset = groundElev - this.originElevation;
+    this.currentElevation = yOffset;
+
     if (immediate || this.currentPos.distanceTo(this.targetPos) > 300) {
       this.currentPos.set(local.x, local.z);
       this.playerLat = lat;
       this.playerLng = lng;
       this.isWalking = false;
       if (this.playerAvatarGroup) {
-        this.playerAvatarGroup.position.set(local.x, 0, local.z);
+        this.playerAvatarGroup.position.set(local.x, yOffset, local.z);
         this.updateChunks(local.x, local.z);
         this.buildingLODManager?.update(this.obstacleMap, local.x, local.z);
       }
@@ -356,7 +383,23 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
     this.targetPos.copy(this.currentPos);
 
-    this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
+    const coords = this.getPlayerLngLat();
+    this.playerLat = coords.lat;
+    this.playerLng = coords.lng;
+
+    // Sample terrain elevation at current location
+    const groundElev = this.getTerrainElevation(this.playerLat, this.playerLng);
+    const yOffset = groundElev - this.originElevation;
+    const dy = yOffset - this.currentElevation;
+    this.currentElevation = yOffset;
+
+    // Compute slope and tilt vehicle along hill inclines
+    if (this.isDrivingState && this.playerVehicle) {
+      const slope = dy / Math.max(0.08, stepDist);
+      this.playerVehicle.setPitch(Math.atan(slope) * 0.9);
+    }
+
+    this.playerAvatarGroup.position.set(this.currentPos.x, yOffset, this.currentPos.y);
 
     const heading = Math.atan2(dirX, dirZ);
     this.character.setHeading(heading);
@@ -373,10 +416,6 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.playerVehicle.update(delta, false, false, 0);
       }
     }
-
-    const coords = this.getPlayerLngLat();
-    this.playerLat = coords.lat;
-    this.playerLng = coords.lng;
 
     if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
       this.lastChunkCheckX = this.currentPos.x;
@@ -416,6 +455,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.originLng = lng;
     this.playerLat = lat;
     this.playerLng = lng;
+    this.originElevation = this.getTerrainElevation(lat, lng);
+    this.currentElevation = 0;
     this.updateModelTransform(lat, lng);
 
     this.petrolStationManager?.clear();
@@ -445,7 +486,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   }
 
   private updateModelTransform(lat: number, lng: number) {
-    const mercator = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+    const mercator = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], this.originElevation);
     this.modelTransform = {
       translateX: mercator.x,
       translateY: mercator.y,
@@ -659,12 +700,22 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.currentPos.x = chosenX;
       this.currentPos.y = chosenZ;
 
-      this.playerAvatarGroup.position.set(this.currentPos.x, 0, this.currentPos.y);
-      this.character.setHeading(chosenHeading);
-
       const coords = this.getPlayerLngLat();
       this.playerLat = coords.lat;
       this.playerLng = coords.lng;
+
+      const groundElev = this.getTerrainElevation(this.playerLat, this.playerLng);
+      const yOffset = groundElev - this.originElevation;
+      const dy = yOffset - this.currentElevation;
+      this.currentElevation = yOffset;
+
+      if (this.isDrivingState && this.playerVehicle) {
+        const slope = dy / Math.max(0.08, moveStep);
+        this.playerVehicle.setPitch(Math.atan(slope) * 0.9);
+      }
+
+      this.playerAvatarGroup.position.set(this.currentPos.x, yOffset, this.currentPos.y);
+      this.character.setHeading(chosenHeading);
 
       if (Math.hypot(this.currentPos.x - this.lastChunkCheckX, this.currentPos.y - this.lastChunkCheckZ) > 30) {
         this.lastChunkCheckX = this.currentPos.x;

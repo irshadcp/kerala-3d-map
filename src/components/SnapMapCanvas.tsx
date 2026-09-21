@@ -251,6 +251,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           map.current.dragPan.enable();
           map.current.touchZoomRotate.enable();
           map.current.touchPitch.enable();
+          try {
+            map.current.setTerrain({ source: 'terrainSource', exaggeration: 0.35 });
+          } catch (_) {}
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
           map.current.flyTo({
@@ -271,6 +274,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           map.current.touchZoomRotate.disable();
           map.current.touchPitch.disable();
           map.current.dragRotate.disable();
+          try {
+            map.current.setTerrain({ source: 'terrainSource', exaggeration: 1.25 });
+          } catch (_) {}
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
@@ -652,6 +658,21 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         });
 
         mapInstance.on('style.load', () => {
+          // Ensure 3D terrain is active with AWS Terrarium DEM tiles
+          if (!mapInstance.getSource('terrainSource')) {
+            mapInstance.addSource('terrainSource', {
+              type: 'raster-dem',
+              tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+              encoding: 'terrarium',
+              tileSize: 256,
+              maxzoom: 15,
+            });
+          }
+          const exaggeration = widenLevelRef.current === 'map' ? 0.35 : 1.25;
+          try {
+            mapInstance.setTerrain({ source: 'terrainSource', exaggeration });
+          } catch (_) {}
+
           const layer = new ThreeMapLayer(currentLocation.lat, currentLocation.lng);
           layer.setPerformanceMode(tierRef.current === 'performance');
           threeLayer.current = layer;
@@ -662,6 +683,15 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           layer.setLocalVoiceState(!!isMuted, !!isSpeaking);
           syncMarkerVisibility(widenLevelRef.current === 'map');
           updateMapRoadsMode(widenLevelRef.current === 'map');
+        });
+
+        // When terrain tiles load, snap 3D player and vehicle to true ground elevation
+        mapInstance.on('terrain', () => {
+          if (threeLayer.current) {
+            const pLat = threeLayer.current.playerLat;
+            const pLng = threeLayer.current.playerLng;
+            threeLayer.current.updatePlayerPosition(pLat, pLng, false);
+          }
         });
 
         // Dynamic 2D/3D zoom sync on manual user zoom end

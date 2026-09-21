@@ -28,6 +28,8 @@ export class PlayerVehicle {
   // Orientation & Animation state
   private currentHeading = 0;
   private targetHeading = 0;
+  private currentPitch = 0;
+  private targetPitch = 0;
   private wheelRotation = 0;
   private steerAngle = 0;
   private scale = 1.0;
@@ -37,6 +39,7 @@ export class PlayerVehicle {
     this.scale = scale;
     this.group = new THREE.Group();
     this.group.name = `player_vehicle_${type}`;
+    this.group.rotation.order = 'YXZ';
 
     if (type === 'auto') {
       this.buildKeralaAuto();
@@ -321,12 +324,16 @@ export class PlayerVehicle {
    * Updates vehicle physics, steering angle, and wheel rolling animations.
    */
   public update(delta: number, isDriving: boolean, isMoving: boolean, speed = 1.0, steeringTarget = 0) {
-    // 1. Smoothly interpolate vehicle heading
+    // 1. Smoothly interpolate vehicle heading and slope pitch
     let angleDiff = this.targetHeading - this.currentHeading;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     this.currentHeading += angleDiff * Math.min(1.0, delta * 12.0);
     this.group.rotation.y = this.currentHeading;
+
+    // Smooth slope pitch tilt with suspension damping
+    this.currentPitch += (this.targetPitch - this.currentPitch) * Math.min(1.0, delta * 7.0);
+    this.group.rotation.x = this.currentPitch;
 
     // 2. Driver model visibility inside vehicle
     if (this.driverGroup) {
@@ -360,6 +367,10 @@ export class PlayerVehicle {
     if (this.driverGroup) {
       this.driverGroup.visible = isDriving;
     }
+  }
+
+  public setPitch(pitch: number) {
+    this.targetPitch = Math.max(-0.45, Math.min(0.45, pitch));
   }
 
   public setPosition(x: number, y: number, z: number) {
