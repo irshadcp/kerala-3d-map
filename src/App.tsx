@@ -381,7 +381,7 @@ function App() {
       </div>
 
       {/* Floating Right Side Camera Controls: 2x, 5x, 10x, Recenter, and Map */}
-      <div className="absolute right-3 top-18 sm:top-20 z-20 pointer-events-auto">
+      <div className="absolute right-3.5 sm:right-4 top-[76px] sm:top-[84px] z-20 pointer-events-auto">
         <GamerCameraControls
           widenLevel={widenLevel}
           onWidenChange={handleWidenChange}
@@ -391,8 +391,8 @@ function App() {
 
       {/* Dynamic Floating Touch Joystick - spans bottom gameplay area */}
       <VirtualJoystick
-        onMove={(dirX, dirZ, isMoving, dt, sUp) => {
-          canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp);
+        onMove={(dirX, dirZ, isMoving, dt, sUp, sRight) => {
+          canvasRef.current?.moveInDirection(dirX, dirZ, isMoving, dt, sUp, sRight);
         }}
         getCameraBearing={() => canvasRef.current?.getCameraBearing() || 0}
       />

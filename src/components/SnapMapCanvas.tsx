@@ -59,7 +59,7 @@ export interface SnapMapCanvasRef {
   rotateBy: (degrees: number) => void;
   resetRotation: () => void;
   toggleRotateMode: () => boolean;
-  moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => void;
+  moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number, sRight?: number) => void;
   getCameraBearing: () => number;
   setWidenLevel: (level: WidenLevel) => void;
   getWidenLevel: () => WidenLevel;
@@ -249,6 +249,8 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           syncMarkerVisibility(true);
           updateMapRoadsMode(true);
           map.current.dragPan.enable();
+          map.current.touchZoomRotate.enable();
+          map.current.touchPitch.enable();
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
           map.current.flyTo({
@@ -266,6 +268,9 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           syncMarkerVisibility(false);
           updateMapRoadsMode(false);
           map.current.dragPan.disable();
+          map.current.touchZoomRotate.disable();
+          map.current.touchPitch.disable();
+          map.current.dragRotate.disable();
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
@@ -360,7 +365,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           isTeleportingRef.current = false;
         }, 600);
       },
-      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, _sUp?: number) => {
+      moveInDirection: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number, sRight?: number) => {
         if (!threeLayer.current) return;
         if (isMoving) {
           // Cancel tap-to-walk destination if user takes joystick control
@@ -396,11 +401,30 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               while (diff < -180) diff += 360;
               while (diff > 180) diff -= 360;
 
-              const turnSpeed = isDriving ? 6.5 : 4.8;
-              const turnFactor = Math.min(1.0, delta * turnSpeed);
-              newBearing = Math.abs(diff) > 0.05
-                ? (currentBearing + diff * turnFactor + 360) % 360
-                : currentBearing;
+              if (isDriving) {
+                // Vehicle auto-rickshaw: smooth, weighted turn follow (clamped to prevent rapid spinning)
+                const turnSpeed = 1.6;
+                const maxTurnPerSec = 50; // max 50 deg/sec
+                const maxTurn = maxTurnPerSec * delta;
+                const step = Math.sign(diff) * Math.min(Math.abs(diff * delta * turnSpeed), maxTurn);
+                newBearing = Math.abs(diff) > 0.05
+                  ? (currentBearing + step + 360) % 360
+                  : currentBearing;
+              } else {
+                // Walking mode:
+                // Only gently rotate camera when moving primarily forward (sUp > 0.45 and |sRight| < 0.45)
+                // When strafing/walking sideways or backwards, keep camera steady so it doesn't spin wildly!
+                const isMovingForward = (sUp === undefined) || (sUp > 0.45 && Math.abs(sRight || 0) < 0.45);
+                if (isMovingForward) {
+                  const turnSpeed = 1.2; // Gentle, slow turning
+                  const maxTurnPerSec = 30; // max 30 deg/sec
+                  const maxTurn = maxTurnPerSec * delta;
+                  const step = Math.sign(diff) * Math.min(Math.abs(diff * delta * turnSpeed), maxTurn);
+                  newBearing = Math.abs(diff) > 0.05
+                    ? (currentBearing + step + 360) % 360
+                    : currentBearing;
+                }
+              }
             }
 
             const basePitch = isDriving ? 64 : (is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0);
@@ -536,9 +560,17 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               while (diff < -180) diff += 360;
               while (diff > 180) diff -= 360;
 
-              const turnSpeed = isDriving ? 5.5 : 4.0;
-              const turnFactor = Math.min(1.0, delta * turnSpeed);
-              newBearing = Math.abs(diff) > 0.05 ? (currentBearing + diff * turnFactor + 360) % 360 : currentBearing;
+              if (isDriving) {
+                const turnSpeed = 1.6;
+                const maxTurn = 50 * delta;
+                const step = Math.sign(diff) * Math.min(Math.abs(diff * delta * turnSpeed), maxTurn);
+                newBearing = Math.abs(diff) > 0.05 ? (currentBearing + step + 360) % 360 : currentBearing;
+              } else {
+                const turnSpeed = 1.2;
+                const maxTurn = 30 * delta;
+                const step = Math.sign(diff) * Math.min(Math.abs(diff * delta * turnSpeed), maxTurn);
+                newBearing = Math.abs(diff) > 0.05 ? (currentBearing + step + 360) % 360 : currentBearing;
+              }
             }
 
             const basePitch = isDriving ? 64 : (is3DRef.current ? WIDEN_CONFIG[widenLevelRef.current].pitch : 0);
@@ -559,6 +591,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
     useEffect(() => {
       if (!mapContainer.current) return;
+      let cleanupOrbitListeners: (() => void) | null = null;
 
       if (!map.current) {
         playerCoordsRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
@@ -580,10 +613,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           minPitch: 0,
           maxZoom: 24,
           minZoom: 6, // Allows full view of entire Kerala state and all player pins
-          dragRotate: true,
-          pitchWithRotate: true,
-          touchZoomRotate: true,
-          touchPitch: true,
+          dragRotate: false,
+          pitchWithRotate: false,
+          touchZoomRotate: false,
+          touchPitch: false,
           fadeDuration: 0, // Zero tile fade tweening for maximum 60fps mobile speed
           dragPan: false, // In 3D mode, swipe rotates camera; enabled in 2D mode
           pixelRatio: initialDpr,
@@ -672,7 +705,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         });
 
         // Mobile & Desktop Swipe-to-Rotate Look-Around in 3D (Right-Thumb & Upper screen orbit zone)
-        let isRotating = false;
+        let orbitPointerId: number | null = null;
         let startX = 0;
         let startY = 0;
         let startBearing = 0;
@@ -682,13 +715,20 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
 
         const onPointerDown = (e: PointerEvent) => {
           if (!map.current || !is3DRef.current) return;
-          // Ignore if pointer is inside the bottom-left virtual joystick zone
+          // If already tracking an orbit finger, ignore additional touches
+          if (orbitPointerId !== null) return;
+
+          // Ignore if pointer is on/inside any interactive UI element or joystick
+          const target = e.target as HTMLElement | null;
+          if (target && target.closest('.virtual-joystick-zone, button, input, [role="button"]')) return;
+
+          // Also check bottom-left virtual joystick zone coordinates
           const isJoystickZone =
-            e.clientX < Math.min(window.innerWidth * 0.48, 240) &&
+            e.clientX < Math.min(window.innerWidth * 0.48, 250) &&
             e.clientY > window.innerHeight - Math.min(window.innerHeight * 0.40, 280);
           if (isJoystickZone) return;
 
-          isRotating = true;
+          orbitPointerId = e.pointerId;
           setManualInteraction(true);
           startX = e.clientX;
           startY = e.clientY;
@@ -700,13 +740,14 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         };
 
         const onPointerMove = (e: PointerEvent) => {
-          if (!isRotating || !map.current || !is3DRef.current) return;
+          // Strictly only process the designated orbit finger (never joystick finger!)
+          if (orbitPointerId === null || e.pointerId !== orbitPointerId || !map.current || !is3DRef.current) return;
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
 
-          // Touch sensitivity tuned for natural thumb swiping
-          const newBearing = (startBearing - dx * 0.45 + 360) % 360;
-          const newPitch = Math.max(25, Math.min(80, startPitch - dy * 0.30));
+          // Smooth, comfortable sensitivity for thumb orbit look-around
+          const newBearing = (startBearing - dx * 0.22 + 360) % 360;
+          const newPitch = Math.max(25, Math.min(78, startPitch - dy * 0.18));
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
           const pLng = threeLayer.current ? threeLayer.current.playerLng : playerCoordsRef.current.lng;
@@ -722,24 +763,34 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
         };
 
         const onPointerUp = (e: PointerEvent) => {
-          if (!isRotating) return;
-          isRotating = false;
-          lastManualLookTimeRef.current = performance.now();
-          setTimeout(() => {
-            setManualInteraction(false);
-          }, 300);
+          if (orbitPointerId === null || e.pointerId !== orbitPointerId) return;
           try {
             container.releasePointerCapture(e.pointerId);
           } catch (_) {}
+          orbitPointerId = null;
+          lastManualLookTimeRef.current = performance.now();
+          setTimeout(() => {
+            setManualInteraction(false);
+          }, 350);
         };
 
-        container.addEventListener('pointerdown', onPointerDown, { capture: true });
-        container.addEventListener('pointermove', onPointerMove, { capture: true });
-        container.addEventListener('pointerup', onPointerUp, { capture: true });
-        container.addEventListener('pointercancel', onPointerUp, { capture: true });
+        container.addEventListener('pointerdown', onPointerDown);
+        container.addEventListener('pointermove', onPointerMove);
+        container.addEventListener('pointerup', onPointerUp);
+        container.addEventListener('pointercancel', onPointerUp);
+
+        cleanupOrbitListeners = () => {
+          container.removeEventListener('pointerdown', onPointerDown);
+          container.removeEventListener('pointermove', onPointerMove);
+          container.removeEventListener('pointerup', onPointerUp);
+          container.removeEventListener('pointercancel', onPointerUp);
+        };
       }
 
       return () => {
+        if (cleanupOrbitListeners) {
+          cleanupOrbitListeners();
+        }
         if (map.current) {
           map.current.remove();
           map.current = null;

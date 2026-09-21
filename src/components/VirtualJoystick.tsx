@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 interface VirtualJoystickProps {
-  onMove: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number) => void;
+  onMove: (dirX: number, dirZ: number, isMoving: boolean, dt?: number, sUp?: number, sRight?: number) => void;
   getCameraBearing?: () => number;
 }
 
@@ -44,7 +44,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       const worldX = sRight * cosB + sUp * sinB;
       const worldZ = sRight * sinB - sUp * cosB;
 
-      onMove(worldX, worldZ, true, dt, sUp);
+      onMove(worldX, worldZ, true, dt, sUp, sRight);
     }
     animFrameRef.current = requestAnimationFrame(tickMovement);
   }, [onMove, getCameraBearing]);
@@ -64,9 +64,12 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
 
   // Pointer event handlers on the touch zone
   const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (!zoneRef.current) return;
     pointerIdRef.current = e.pointerId;
-    zoneRef.current.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
     lastTimeRef.current = performance.now();
 
     const rect = zoneRef.current.getBoundingClientRect();
@@ -81,6 +84,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (!isActive || e.pointerId !== pointerIdRef.current) return;
 
     const dx = e.clientX - originRef.current.x;
@@ -107,7 +111,11 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (e.pointerId !== pointerIdRef.current) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) {}
     pointerIdRef.current = null;
     setIsActive(false);
     setKnobPos({ x: 0, y: 0 });
@@ -173,7 +181,11 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ onMove, getCam
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="absolute bottom-0 left-0 w-[46vw] max-w-[230px] h-[38vh] max-h-[260px] pointer-events-auto touch-none select-none z-20"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+      onTouchCancel={(e) => e.stopPropagation()}
+      className="virtual-joystick-zone absolute bottom-0 left-0 w-[46vw] max-w-[230px] h-[38vh] max-h-[260px] pointer-events-auto touch-none select-none z-20"
       style={{ touchAction: 'none' }}
     >
       {/* Ergonomic Bottom-Left Mobile Joystick */}
