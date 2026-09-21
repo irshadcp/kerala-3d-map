@@ -28,7 +28,7 @@ export class KeralaHouseManager {
   private lastUpdateZ = -99999;
 
   private isPerformanceMode = false;
-  private lodRadius = 85; // meters around player
+  private lodRadius = 320; // Expanded to 320m to cover full city view horizon
 
   // Shared Materials for instant batching
   private terracottaRoofMat: THREE.MeshLambertMaterial;
@@ -110,8 +110,106 @@ export class KeralaHouseManager {
 
   public setPerformanceMode(isPerformance: boolean) {
     this.isPerformanceMode = isPerformance;
-    this.lodRadius = isPerformance ? 60 : 95;
+    this.lodRadius = isPerformance ? 220 : 340;
     this.lastUpdateX = -99999;
+  }
+
+  public getHouseCount(): number {
+    return this.houses.size;
+  }
+
+  /**
+   * Constructs an Authentic Multi-Story Kerala Town Commercial Building / Shopping Complex.
+   * Features:
+   * - 2-4 stories with dividing cornices and storefront shop awnings
+   * - Sloping terracotta clay crown roof atop rooftop terrace
+   * - Deep 1.8m granite plinth foundation (തറ) anchored into terrain
+   * - Rooftop Sintex water tank
+   * - STRICTLY ZERO windows or doors on exterior walls
+   */
+  private createKeralaTownCommercialBuilding(
+    width: number,
+    depth: number,
+    angle: number,
+    floors = 3
+  ): { group: THREE.Group; geometries: THREE.BufferGeometry[] } {
+    const group = new THREE.Group();
+    const geometries: THREE.BufferGeometry[] = [];
+
+    const w = Math.max(10.0, Math.min(width, 28.0));
+    const d = Math.max(8.0, Math.min(depth, 24.0));
+    const floorH = 3.2;
+    const totalWallH = floorH * floors;
+
+    // 1. Deep Granite Foundation Plinth (1.8m deep)
+    const plinthH = 2.2;
+    const plinthGeo = new THREE.BoxGeometry(w + 0.8, plinthH, d + 0.8);
+    geometries.push(plinthGeo);
+    const plinth = new THREE.Mesh(plinthGeo, this.plinthMat);
+    plinth.position.set(0, -1.8 + plinthH * 0.5, 0);
+    group.add(plinth);
+
+    // 2. Main Multi-Story Plaster Facade (Zero windows/doors)
+    const wallGeo = new THREE.BoxGeometry(w, totalWallH, d);
+    geometries.push(wallGeo);
+    const wallMesh = new THREE.Mesh(wallGeo, this.creamWallMat);
+    wallMesh.position.set(0, 0.4 + totalWallH * 0.5, 0);
+    group.add(wallMesh);
+
+    // 3. Storefront Ground Awnings (Azure/Blue canopy)
+    const awningDepth = 2.0;
+    const awningGeo = new THREE.BoxGeometry(w + 0.4, 0.15, awningDepth);
+    geometries.push(awningGeo);
+    const awning = new THREE.Mesh(awningGeo, this.awningBlueMat);
+    awning.position.set(0, 0.4 + 2.8, d * 0.5 + awningDepth * 0.5 - 0.2);
+    awning.rotation.x = 0.18;
+    group.add(awning);
+
+    // 4. Floor Dividing Cornices (horizontal architectural bands)
+    for (let f = 1; f < floors; f++) {
+      const corniceGeo = new THREE.BoxGeometry(w + 0.4, 0.2, d + 0.4);
+      geometries.push(corniceGeo);
+      const cornice = new THREE.Mesh(corniceGeo, this.timberTrimMat);
+      cornice.position.set(0, 0.4 + f * floorH, 0);
+      group.add(cornice);
+    }
+
+    // 5. Rooftop Parapet and Terracotta Tiled Crown Roof
+    const parapetGeo = new THREE.BoxGeometry(w + 0.4, 0.7, d + 0.4);
+    geometries.push(parapetGeo);
+    const parapet = new THREE.Mesh(parapetGeo, this.whitewashWallMat);
+    parapet.position.set(0, 0.4 + totalWallH + 0.35, 0);
+    group.add(parapet);
+
+    // Sloping Terracotta Roof Canopy atop central terrace
+    const roofW = w * 0.85;
+    const roofD = d * 0.85;
+    const roofPitchH = Math.min(3.5, Math.max(2.2, Math.min(roofW, roofD) * 0.35));
+    const hippedGeo = new THREE.ConeGeometry(
+      Math.max(roofW, roofD) * 0.6,
+      roofPitchH,
+      4
+    );
+    hippedGeo.rotateY(Math.PI / 4);
+    geometries.push(hippedGeo);
+    const hippedMesh = new THREE.Mesh(hippedGeo, this.terracottaRoofMat);
+    hippedMesh.position.set(0, 0.4 + totalWallH + 0.7 + roofPitchH * 0.5, 0);
+    hippedMesh.scale.set(
+      roofW / Math.max(roofW, roofD),
+      1,
+      roofD / Math.max(roofW, roofD)
+    );
+    group.add(hippedMesh);
+
+    // 6. Rooftop Sintex Water Tanks
+    const tankGeo = new THREE.CylinderGeometry(0.7, 0.7, 1.4, 10);
+    geometries.push(tankGeo);
+    const tank = new THREE.Mesh(tankGeo, this.waterTankMat);
+    tank.position.set(w * 0.3, 0.4 + totalWallH + 0.7 + 0.7, -d * 0.25);
+    group.add(tank);
+
+    group.rotation.y = angle;
+    return { group, geometries };
   }
 
   /**
@@ -133,8 +231,8 @@ export class KeralaHouseManager {
     const group = new THREE.Group();
     const geometries: THREE.BufferGeometry[] = [];
 
-    const w = Math.max(5.5, Math.min(width, 10.0));
-    const d = Math.max(5.5, Math.min(depth, 10.0));
+    const w = Math.max(5.5, Math.min(width, 18.0));
+    const d = Math.max(5.5, Math.min(depth, 18.0));
     const wallH = 2.9;
 
     // 1. Solid Plinth Foundation (തറ)
@@ -311,8 +409,8 @@ export class KeralaHouseManager {
     const group = new THREE.Group();
     const geometries: THREE.BufferGeometry[] = [];
 
-    const w = Math.max(6.5, Math.min(width, 11.0));
-    const d = Math.max(6.5, Math.min(depth, 11.0));
+    const w = Math.max(6.5, Math.min(width, 20.0));
+    const d = Math.max(6.5, Math.min(depth, 20.0));
     const groundH = 3.0;
     const upperH = 2.6;
 
@@ -478,7 +576,7 @@ export class KeralaHouseManager {
     this.lastUpdateZ = playerZ;
 
     const activeKeys = new Set<string>();
-    const maxHouses = this.isPerformanceMode ? 20 : 36;
+    const maxHouses = this.isPerformanceMode ? 90 : 240;
 
     // 1. Process OSM Building Footprints in radius
     const nearbyOsmBuildings = obstacleMap.getBuildingsInRadius(
@@ -500,12 +598,15 @@ export class KeralaHouseManager {
       activeKeys.add(key);
 
       if (!this.houses.has(key)) {
-        // Pick house style
+        // Pick house / building style
         let houseItem: { group: THREE.Group; geometries: THREE.BufferGeometry[] };
         const roll = Math.abs(Math.sin(centerX * 12.9898 + centerZ * 78.233));
-        if (b.isCommercial || roll < 0.25) {
+        if (b.isCommercial || w > 15 || d > 15) {
+          const floors = roll < 0.4 ? 2 : (roll < 0.8 ? 3 : 4);
+          houseItem = this.createKeralaTownCommercialBuilding(w, d, roll * Math.PI * 2, floors);
+        } else if (roll < 0.28) {
           houseItem = this.createRoadsideShop(w, d, roll * Math.PI * 2);
-        } else if (roll < 0.65) {
+        } else if (roll < 0.68) {
           houseItem = this.createTraditionalKeralaHouse(w, d, roll * Math.PI * 2);
         } else {
           houseItem = this.createModernKeralaVilla(w, d, roll * Math.PI * 2);
@@ -529,8 +630,8 @@ export class KeralaHouseManager {
       count++;
     }
 
-    // 2. If OSM footprints are sparse, generate roadside Kerala homesteads along roads!
-    if (count < maxHouses * 0.7 && obstacleMap.roads.length > 0) {
+    // 2. Active Roadside Infill: populate town streets & roads with authentic Kerala buildings!
+    if (count < maxHouses && obstacleMap.roads.length > 0) {
       for (const road of obstacleMap.roads) {
         if (count >= maxHouses) break;
 
@@ -538,13 +639,13 @@ export class KeralaHouseManager {
         const midZ = (road.p1.z + road.p2.z) * 0.5;
         const distToPlayer = Math.hypot(midX - playerX, midZ - playerZ);
 
-        if (distToPlayer > this.lodRadius || road.length < 18) continue;
+        if (distToPlayer > this.lodRadius || road.length < 14) continue;
 
         // Vector along road
         const rdx = road.p2.x - road.p1.x;
         const rdz = road.p2.z - road.p1.z;
         const roadLen = Math.hypot(rdx, rdz);
-        if (roadLen < 12) continue;
+        if (roadLen < 10) continue;
 
         const dirX = rdx / roadLen;
         const dirZ = rdz / roadLen;
@@ -552,19 +653,20 @@ export class KeralaHouseManager {
         const normX = -dirZ;
         const normZ = dirX;
 
-        // Place on roadside with 8-12m setback
+        // Place on roadside with 8.5m setback
         for (const side of [-1, 1]) {
           if (count >= maxHouses) break;
 
-          const setback = 9.0;
+          const setback = 9.5;
           const hx = midX + side * normX * setback;
           const hz = midZ + side * normZ * setback;
 
           const key = `road_${hx.toFixed(1)}_${hz.toFixed(1)}`;
           if (activeKeys.has(key)) continue;
 
-          // Ensure not colliding with water or other buildings
+          // Ensure not colliding with water or existing buildings
           if (obstacleMap.isPointInWater(hx, hz, 3.0)) continue;
+          if (obstacleMap.isBuildingCollision(hx, hz, 3.5, 3.5, 0)) continue;
 
           activeKeys.add(key);
 
@@ -573,12 +675,14 @@ export class KeralaHouseManager {
             const roll = Math.abs(Math.sin(hx * 37.1 + hz * 91.7));
 
             let houseItem: { group: THREE.Group; geometries: THREE.BufferGeometry[] };
-            if (roll < 0.3) {
-              houseItem = this.createRoadsideShop(5.2, 4.8, roadAngle);
-            } else if (roll < 0.7) {
-              houseItem = this.createTraditionalKeralaHouse(7.5, 7.0, roadAngle);
+            if (roll < 0.18) {
+              houseItem = this.createKeralaTownCommercialBuilding(12.0, 9.0, roadAngle, 2);
+            } else if (roll < 0.45) {
+              houseItem = this.createRoadsideShop(5.5, 4.8, roadAngle);
+            } else if (roll < 0.75) {
+              houseItem = this.createTraditionalKeralaHouse(8.0, 7.5, roadAngle);
             } else {
-              houseItem = this.createModernKeralaVilla(8.0, 7.5, roadAngle);
+              houseItem = this.createModernKeralaVilla(9.0, 8.0, roadAngle);
             }
 
             const groundY = getElevation ? getElevation(hx, hz) : 0;

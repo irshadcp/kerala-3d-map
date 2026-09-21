@@ -68,19 +68,12 @@ export class SpatialObstacleMap {
     return `${cellX},${cellZ}`;
   }
 
-  public update(map: maplibregl.Map, originLat: number, originLng: number): boolean {
-    if (!map || !map.isStyleLoaded()) return false;
-
-    // Check if map source is loaded
-    try {
-      if (!map.isSourceLoaded('openmaptiles')) return false;
-    } catch {
-      return false;
-    }
+  public update(map: maplibregl.Map, originLat: number, originLng: number, force = false): boolean {
+    if (!map) return false;
 
     const dist = GeoCoords.distanceMeters(originLat, originLng, this.lastLat, this.lastLng);
-    // Don't recompute if we haven't moved and we already have obstacles
-    if (dist < 80 && this.isReady && (this.totalBuildings > 0 || this.totalRoads > 0)) {
+    // Don't skip if force is true, or if we haven't loaded buildings yet!
+    if (!force && dist < 80 && this.isReady && this.totalBuildings > 0 && this.totalRoads > 0) {
       return false;
     }
 

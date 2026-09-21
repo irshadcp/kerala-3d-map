@@ -207,11 +207,9 @@
       "type": "fill",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 15.5,
-      "paint": {
-        "fill-color": "#ea580c",
-        "fill-outline-color": "#c2410c",
-        "fill-opacity": 0.45
+      "minzoom": 13,
+      "layout": {
+        "visibility": "none"
       }
     },
     {

@@ -281,13 +281,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
         const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
         const distFromLast = Math.hypot(local.x - this.lastRegenX, local.z - this.lastRegenZ);
-        if (this.lastRegenX !== -9999 && distFromLast < 50) return;
+        const needsInitialSpawn = this.keralaHouseManager.getHouseCount() === 0;
+        if (!needsInitialSpawn && this.lastRegenX !== -9999 && distFromLast < 50) return;
 
         this.lastRegenX = local.x;
         this.lastRegenZ = local.z;
 
-        const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
-        if (refreshed) {
+        const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng, needsInitialSpawn);
+        if (refreshed || needsInitialSpawn) {
           const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
 
           // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
@@ -949,14 +950,25 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (is3D) {
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
-      this.keralaHouseManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
-      this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, (x, z) => this.getElevationAtLocal(x, z));
-      this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
-      this.mountainAtmosphere?.update(local.x, local.z, (x, z) => this.getElevationAtLocal(x, z));
+      const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
+      this.keralaHouseManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+      this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, getElev);
+      this.roadsideManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+      this.urbanManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+      this.busStopManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+      this.petrolStationManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+      this.villageManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+      this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+      this.mountainAtmosphere?.update(local.x, local.z, getElev);
       this.map?.triggerRepaint();
     } else {
       this.keralaHouseManager?.clear();
       this.keralaBillboardManager?.clear();
+      this.roadsideManager?.clear();
+      this.urbanManager?.clear();
+      this.busStopManager?.clear();
+      this.petrolStationManager?.clear();
+      this.villageManager?.clear();
       this.waterAnimationManager?.clear();
       this.mountainAtmosphere?.clear();
       this.map?.triggerRepaint();
