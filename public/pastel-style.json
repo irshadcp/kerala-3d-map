@@ -17,7 +17,7 @@
   },
   "terrain": {
     "source": "terrainSource",
-    "exaggeration": 1.25
+    "exaggeration": 1.0
   },
   "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   "light": {
@@ -232,7 +232,13 @@
           ["linear"],
           ["zoom"],
           16.2, 0,
-          16.6, ["coalesce", ["get", "render_height"], 8]
+          16.6, [
+            "coalesce",
+            ["get", "render_height"],
+            ["get", "height"],
+            ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 1.5], 4.2],
+            9.5
+          ]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
         "fill-extrusion-opacity": [

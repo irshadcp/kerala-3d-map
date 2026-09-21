@@ -24,7 +24,12 @@ export class BusStopManager {
     this.scene = scene;
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) {
       return false;
     }
@@ -126,7 +131,8 @@ export class BusStopManager {
 
           // 2. Create and orient the 3D model
           const model = BusStopGenerator.createModel();
-          model.position.set(cx, 0, cz);
+          const elevY = getElevation ? getElevation(cx, cz) : 0;
+          model.position.set(cx, elevY, cz);
 
           // Model's open front is facing towards the road:
           const facingAngle = Math.atan2(-nx, -nz);

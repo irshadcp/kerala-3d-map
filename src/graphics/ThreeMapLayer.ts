@@ -58,6 +58,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public getTerrainElevation(lat: number, lng: number): number {
     if (!this.map) return 0;
     try {
+      if (typeof (this.map as any).queryTerrainElevation === 'function') {
+        const elev = (this.map as any).queryTerrainElevation([lng, lat]);
+        if (typeof elev === 'number' && !isNaN(elev)) {
+          return elev;
+        }
+      }
       const terrain = (this.map as any).terrain;
       if (terrain && typeof terrain.getElevationForLngLatZoom === 'function') {
         const zoom = Math.min(14, Math.max(8, this.map.getZoom()));
@@ -74,6 +80,63 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       }
     } catch (_) {}
     return 0;
+  }
+
+  public getElevationAtLocal(x: number, z: number): number {
+    const coords = GeoCoords.toLatLng(x, z, this.originLat, this.originLng);
+    const groundElev = this.getTerrainElevation(coords.lat, coords.lng);
+    return groundElev - this.originElevation;
+  }
+
+  public onTerrainLoaded() {
+    const originElev = this.getTerrainElevation(this.originLat, this.originLng);
+    if (originElev !== this.originElevation && originElev !== 0) {
+      this.originElevation = originElev;
+      this.updateModelTransform(this.originLat, this.originLng);
+      this.refreshSceneElevations();
+    }
+  }
+
+  public refreshSceneElevations() {
+    if (!this.map) return;
+    const groundElev = this.getTerrainElevation(this.playerLat, this.playerLng);
+    const yOffset = groundElev - this.originElevation;
+    this.currentElevation = yOffset;
+    if (this.playerAvatarGroup) {
+      this.playerAvatarGroup.position.set(this.currentPos.x, yOffset, this.currentPos.y);
+    }
+
+    if (this.is3DActive) {
+      // 1. Clear & regenerate tree chunks with elevation sampling
+      for (const group of this.loadedChunks.values()) {
+        this.threeDGroup.remove(group);
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry?.dispose();
+          }
+        });
+      }
+      this.loadedChunks.clear();
+      const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
+      this.updateChunks(local.x, local.z);
+
+      // 2. Re-evaluate landmark managers with elevation sampling
+      const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
+      if (this.obstacleMap && this.obstacleMap.isReady) {
+        this.petrolStationManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.busStopManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.playgroundManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.villageManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.maritimeManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.highlandManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.urbanManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.coastalManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.roadsideManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
+        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+      }
+    }
+    this.map?.triggerRepaint();
   }
 
   private modelTransform = {
@@ -210,32 +273,34 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
         const refreshed = this.obstacleMap.update(this.map, this.originLat, this.originLng);
         if (refreshed) {
+          const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
+
           // 1. Place roadside petrol stations in free spaces & register footprints in obstacleMap
-          this.petrolStationManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.petrolStationManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 2. Place roadside bus stops in free spaces & register footprints in obstacleMap
-          this.busStopManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.busStopManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 3. Place neighborhood sports playgrounds in free spaces away from highway junctions
-          this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.playgroundManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 4. Place Kerala Village & Cultural elements (Chayakada, Wells, Temples, Churches, Mosques)
-          this.villageManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.villageManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 5. Place Kerala Maritime & Backwater elements (Houseboats, Fishing Boats, Jetties, Fish Markets)
-          this.maritimeManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.maritimeManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 6. Place Kerala Highland & Western Ghats elements (Tea plantations, Checkposts, Viewpoints)
-          this.highlandManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.highlandManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 7. Place Kerala Urban elements (Traffic signals, Highway Billboards)
-          this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.urbanManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 8. Place Kerala Coastal elements (Seawalls, Breakwaters, Fishing Houses, Drying Racks, Harbours)
-          this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.coastalManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // 9. Place Kerala Roadside elements
-          this.roadsideManager.update(this.obstacleMap, this.originLat, this.originLng);
+          this.roadsideManager.update(this.obstacleMap, this.originLat, this.originLng, getElev);
 
           // Expose placed landmarks globally for UI navigation and inspection
           if (typeof window !== 'undefined') {
@@ -266,7 +331,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           this.updateChunks(local.x, local.z);
 
           // 11. Dynamic Proximity Building LOD: generate rich roof parapet & ground AO plinths for nearby buildings
-          this.buildingLODManager.update(this.obstacleMap, local.x, local.z, true);
+          this.buildingLODManager.update(this.obstacleMap, local.x, local.z, true, getElev);
         }
       }, 450);
     };
@@ -302,7 +367,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       if (this.playerAvatarGroup) {
         this.playerAvatarGroup.position.set(local.x, yOffset, local.z);
         this.updateChunks(local.x, local.z);
-        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z);
+        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, false, (x, z) => this.getElevationAtLocal(x, z));
       }
     }
   }
@@ -536,7 +601,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
               this.threeDGroup as unknown as THREE.Scene,
               this.obstacleMap,
               this.originLat,
-              this.originLng
+              this.originLng,
+              (x, z) => this.getElevationAtLocal(x, z)
             );
             this.threeDGroup.add(chunkGroup);
             this.loadedChunks.set(key, chunkGroup);
@@ -560,7 +626,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     }
 
     // Dynamic Distance-based Building LOD
-    this.buildingLODManager?.update(this.obstacleMap, playerX, playerZ);
+    this.buildingLODManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
   }
 
   public updateTapMovement(delta: number): boolean {
@@ -722,7 +788,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.lastChunkCheckZ = this.currentPos.y;
         this.updateChunks(this.currentPos.x, this.currentPos.y);
       }
-      this.buildingLODManager?.update(this.obstacleMap, this.currentPos.x, this.currentPos.y);
+      this.buildingLODManager?.update(this.obstacleMap, this.currentPos.x, this.currentPos.y, false, (x, z) => this.getElevationAtLocal(x, z));
       return true;
     }
     return false;
@@ -730,6 +796,16 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
   public render(_gl: any, matrix: any) {
     if (!this.scene || !this.camera) return;
+
+    // Check if DEM terrain tiles finished loading after startup
+    if (this.originElevation === 0) {
+      const originElev = this.getTerrainElevation(this.originLat, this.originLng);
+      if (originElev !== 0) {
+        this.originElevation = originElev;
+        this.updateModelTransform(this.originLat, this.originLng);
+        this.refreshSceneElevations();
+      }
+    }
 
     const now = performance.now();
     const delta = Math.min(0.05, (now - this.lastFrameTime) / 1000);
@@ -765,7 +841,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
     // Update remote multiplayer characters & proximity audio
     if (this.remotePlayerManager) {
-      this.remotePlayerManager.update(delta, this.currentPos.x, this.currentPos.y);
+      this.remotePlayerManager.update(
+        delta,
+        this.currentPos.x,
+        this.currentPos.y,
+        (x, z) => this.getElevationAtLocal(x, z)
+      );
     }
 
     // Sync MapLibre Camera to Three.js Projection
@@ -830,7 +911,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (is3D) {
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
-      this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true);
+      this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
       this.map?.triggerRepaint();
     } else {
       this.buildingLODManager?.clear();

@@ -561,7 +561,8 @@ export class SnapTreeGenerator {
     _scene: THREE.Scene,
     obstacleMap: SpatialObstacleMap,
     originLat?: number,
-    originLng?: number
+    originLng?: number,
+    getElevation?: (localX: number, localZ: number) => number
   ): THREE.Group {
     const group = new THREE.Group();
     group.name = `chunk_${chunkX}_${chunkZ}`;
@@ -651,7 +652,8 @@ export class SnapTreeGenerator {
         }
       }
 
-      treeModel.position.set(rx, 0, rz);
+      const treeY = getElevation ? getElevation(rx, rz) : 0;
+      treeModel.position.set(rx, treeY, rz);
       treeModel.rotation.y = seededRandom(seed + 3) * Math.PI * 2;
       group.add(treeModel);
     }

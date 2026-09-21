@@ -275,7 +275,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           map.current.touchPitch.disable();
           map.current.dragRotate.disable();
           try {
-            map.current.setTerrain({ source: 'terrainSource', exaggeration: 1.25 });
+            map.current.setTerrain({ source: 'terrainSource', exaggeration: 1.0 });
           } catch (_) {}
 
           const pLat = threeLayer.current ? threeLayer.current.playerLat : playerCoordsRef.current.lat;
@@ -668,7 +668,7 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
               maxzoom: 15,
             });
           }
-          const exaggeration = widenLevelRef.current === 'map' ? 0.35 : 1.25;
+          const exaggeration = widenLevelRef.current === 'map' ? 0.35 : 1.0;
           try {
             mapInstance.setTerrain({ source: 'terrainSource', exaggeration });
           } catch (_) {}
@@ -685,9 +685,10 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           updateMapRoadsMode(widenLevelRef.current === 'map');
         });
 
-        // When terrain tiles load, snap 3D player and vehicle to true ground elevation
+        // When terrain tiles load, snap 3D player, vehicle, and all scene objects to true ground elevation
         mapInstance.on('terrain', () => {
           if (threeLayer.current) {
+            threeLayer.current.onTerrainLoaded();
             const pLat = threeLayer.current.playerLat;
             const pLng = threeLayer.current.playerLng;
             threeLayer.current.updatePlayerPosition(pLat, pLng, false);

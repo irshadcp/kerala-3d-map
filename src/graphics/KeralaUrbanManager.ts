@@ -59,7 +59,20 @@ export class KeralaUrbanManager {
     this.placedItems = [];
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  private getElevation?: (localX: number, localZ: number) => number;
+
+  private setModelPosition(model: THREE.Object3D, x: number, z: number) {
+    const y = this.getElevation ? this.getElevation(x, z) : 0;
+    model.position.set(x, y, z);
+  }
+
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) {
       return false;
     }
@@ -123,7 +136,7 @@ export class KeralaUrbanManager {
                 obstacleMap.registerCustomObstacle(sx - 3.2, sx + 3.2, sz - 3.2, sz + 3.2);
 
                 const model = KeralaUrbanGenerator.createTrafficSignalModel();
-                model.position.set(sx, 0, sz);
+                this.setModelPosition(model, sx, sz);
                 model.rotation.y = Math.atan2(tx, tz);
 
                 this.scene.add(model);
@@ -201,7 +214,7 @@ export class KeralaUrbanManager {
                   obstacleMap.registerCustomObstacle(lx - 1.2, lx + 1.2, lz - 1.2, lz + 1.2);
 
                   const model = KeralaUrbanGenerator.createStreetLightModel();
-                  model.position.set(lx, 0, lz);
+                  this.setModelPosition(model, lx, lz);
                   model.rotation.y = facingRoadAngle;
 
                   this.scene.add(model);
@@ -251,7 +264,7 @@ export class KeralaUrbanManager {
                 obstacleMap.registerCustomObstacle(sx - 9.0, sx + 9.0, sz - 5.5, sz + 5.5);
 
                 const model = KeralaUrbanGenerator.createDenseRoadsideShopsModel();
-                model.position.set(sx, 0, sz);
+                this.setModelPosition(model, sx, sz);
                 model.rotation.y = facingRoadAngle;
 
                 this.scene.add(model);
@@ -311,7 +324,7 @@ export class KeralaUrbanManager {
                 obstacleMap.registerCustomObstacle(px - 10.0, px + 10.0, pz - 7.5, pz + 7.5);
 
                 const model = KeralaUrbanGenerator.createParkingAreaModel();
-                model.position.set(px, 0, pz);
+                this.setModelPosition(model, px, pz);
                 model.rotation.y = facingRoadAngle;
 
                 this.scene.add(model);
@@ -370,7 +383,7 @@ export class KeralaUrbanManager {
                 obstacleMap.registerCustomObstacle(bx - 6.5, bx + 6.5, bz - 3.2, bz + 3.2);
 
                 const model = KeralaUrbanGenerator.createBillboardModel();
-                model.position.set(bx, 0, bz);
+                this.setModelPosition(model, bx, bz);
                 model.rotation.y = roadAngle;
 
                 this.scene.add(model);
@@ -463,7 +476,7 @@ export class KeralaUrbanManager {
               if (!this.items.has(key)) {
                 obstacleMap.registerCustomObstacle(txPos - 15, txPos + 15, tzPos - 12, tzPos + 12);
 
-                model.position.set(txPos, 0, tzPos);
+                this.setModelPosition(model, txPos, tzPos);
                 model.rotation.y = facingRoadAngle;
 
                 this.scene.add(model);

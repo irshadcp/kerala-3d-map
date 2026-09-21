@@ -312,7 +312,8 @@ export class RemotePlayerManager {
   public update(
     delta: number,
     localPlayerX: number,
-    localPlayerZ: number
+    localPlayerZ: number,
+    getElevation?: (localX: number, localZ: number) => number
   ) {
     const now = Date.now();
     const toRemove: string[] = [];
@@ -327,7 +328,8 @@ export class RemotePlayerManager {
       // Smooth coordinate interpolation (lerp)
       const lerpFactor = Math.min(1, delta * 12);
       player.currentPos.lerp(player.targetPos, lerpFactor);
-      player.group.position.set(player.currentPos.x, 0, player.currentPos.y);
+      const groundY = getElevation ? getElevation(player.currentPos.x, player.currentPos.y) : 0;
+      player.group.position.set(player.currentPos.x, groundY, player.currentPos.y);
 
       // Smooth heading interpolation
       let diff = player.targetHeading - player.currentHeading;

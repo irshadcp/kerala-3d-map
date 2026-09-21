@@ -24,7 +24,12 @@ export class PetrolStationManager {
     this.scene = scene;
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) {
       return false;
     }
@@ -129,7 +134,8 @@ export class PetrolStationManager {
 
           // 2. Create and orient the 3D model
           const model = PetrolStationGenerator.createModel();
-          model.position.set(cx, 0, cz);
+          const elevY = getElevation ? getElevation(cx, cz) : 0;
+          model.position.set(cx, elevY, cz);
 
           // Model's front (pumps + canopy) is at +Z in local space.
           // Point local +Z towards the road (direction -nx, -nz):

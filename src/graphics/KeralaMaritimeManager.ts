@@ -40,6 +40,7 @@ export class KeralaMaritimeManager {
   private items = new Map<string, THREE.Group>();
   private placedVessels: Array<{ x: number; z: number; r: number }> = [];
   private floatingVessels: FloatingVessel[] = [];
+  private getElevation?: (localX: number, localZ: number) => number;
 
   public placedItems: PlacedMaritimeItemInfo[] = [];
 
@@ -73,9 +74,10 @@ export class KeralaMaritimeManager {
 
     for (let i = 0; i < this.floatingVessels.length; i++) {
       const v = this.floatingVessels[i];
-      const waveY = Math.sin(t * 1.5 + v.phase) * 0.045;
-      const waveRoll = Math.sin(t * 1.2 + v.phase) * (0.022 * v.rollFactor);
-      const wavePitch = Math.cos(t * 0.85 + v.phase) * (0.015 * v.pitchFactor);
+      // Multi-frequency wave formula
+      const waveY = Math.sin(t * 1.8 + v.phase) * 0.05 + Math.cos(t * 3.1 + v.phase * 1.3) * 0.02;
+      const waveRoll = Math.sin(t * 1.4 + v.phase) * 0.035 * v.rollFactor;
+      const wavePitch = Math.cos(t * 1.1 + v.phase * 0.9) * 0.02 * v.pitchFactor;
 
       v.group.position.y = v.baseY + waveY;
       v.group.rotation.z = waveRoll;
@@ -132,7 +134,13 @@ export class KeralaMaritimeManager {
     return true;
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady || obstacleMap.waterObstacles.length === 0) {
       return false;
     }
@@ -345,8 +353,11 @@ export class KeralaMaritimeManager {
             const key = `mv_${cand.type}_${Math.round(cx)}_${Math.round(cz)}`;
             if (this.items.has(key)) continue;
 
+            const elevY = this.getElevation ? this.getElevation(cx, cz) : 0;
+            const finalBaseY = elevY + cand.baseY;
+
             const model = cand.create();
-            model.position.set(cx, cand.baseY, cz);
+            model.position.set(cx, finalBaseY, cz);
             model.rotation.y = heading;
 
             this.scene.add(model);
@@ -364,7 +375,7 @@ export class KeralaMaritimeManager {
             // Add to floating wave animation
             this.floatingVessels.push({
               group: model,
-              baseY: cand.baseY,
+              baseY: finalBaseY,
               phase: seed * Math.PI * 2,
               rollFactor: cand.rollFactor,
               pitchFactor: cand.pitchFactor,
@@ -415,8 +426,9 @@ export class KeralaMaritimeManager {
         const key = `jetty_${Math.round(midX)}_${Math.round(midZ)}`;
         if (this.items.has(key)) continue;
 
+        const elevY = this.getElevation ? this.getElevation(midX, midZ) : 0;
         const model = KeralaMaritimeGenerator.createBoatJettyModel();
-        model.position.set(midX, 0, midZ);
+        model.position.set(midX, elevY, midZ);
         model.rotation.y = jAngle;
 
         this.scene.add(model);

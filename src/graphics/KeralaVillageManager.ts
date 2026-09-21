@@ -95,7 +95,20 @@ export class KeralaVillageManager {
     this.placedItems = [];
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  private getElevation?: (localX: number, localZ: number) => number;
+
+  private setModelPosition(model: THREE.Object3D, x: number, z: number) {
+    const y = this.getElevation ? this.getElevation(x, z) : 0;
+    model.position.set(x, y, z);
+  }
+
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) {
       return false;
     }
@@ -145,7 +158,7 @@ export class KeralaVillageManager {
             const key = `culvert_${Math.round(midX / 6)}_${Math.round(midZ / 6)}`;
             if (!this.items.has(key)) {
               const model = KeralaVillageGenerator.createCanalBridgeModel(road.buffer * 2);
-              model.position.set(midX, 0, midZ);
+              this.setModelPosition(model, midX, midZ);
               model.rotation.y = Math.atan2(tx, tz);
 
               // Register custom obstacles along left & right parapet edges to clear tree canopies
@@ -222,7 +235,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(cx - 4.2, cx + 4.2, cz - 3.2, cz + 3.2);
 
                 const model = KeralaVillageGenerator.createChayakadaModel();
-                model.position.set(cx, 0, cz);
+                this.setModelPosition(model, cx, cz);
                 model.rotation.y = rotY; // Face towards road
 
                 this.scene.add(model);
@@ -283,7 +296,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(wx - 3.5, wx + 3.5, wz - 3.5, wz + 3.5);
 
                 const model = KeralaVillageGenerator.createOpenWellModel();
-                model.position.set(wx, 0, wz);
+                this.setModelPosition(model, wx, wz);
 
                 this.scene.add(model);
                 this.items.set(key, model);
@@ -360,7 +373,7 @@ export class KeralaVillageManager {
                   itemName = 'മുസ്‌ലിം പള്ളി (Kerala Mosque)';
                 }
 
-                model.position.set(sx, 0, sz);
+                this.setModelPosition(model, sx, sz);
                 model.rotation.y = rotY; // Face road
 
                 this.scene.add(model);
@@ -422,7 +435,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(hx - 6.0, hx + 6.0, hz - 6.0, hz + 6.0);
 
                 const model = KeralaVillageGenerator.createSmallTiledHouseModel();
-                model.position.set(hx, 0, hz);
+                this.setModelPosition(model, hx, hz);
                 model.rotation.y = rotY; // Face road
 
                 this.scene.add(model);
@@ -483,7 +496,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(fx - 7.5, fx + 7.5, fz - 7.5, fz + 7.5);
 
                 const model = KeralaVillageGenerator.createFarmBuildingPlotModel();
-                model.position.set(fx, 0, fz);
+                this.setModelPosition(model, fx, fz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -543,7 +556,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(px - 8.5, px + 8.5, pz - 8.5, pz + 8.5);
 
                 const model = KeralaVillageGenerator.createVillagePondModel();
-                model.position.set(px, 0, pz);
+                this.setModelPosition(model, px, pz);
 
                 this.scene.add(model);
                 this.items.set(key, model);
@@ -603,7 +616,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(ax - 5.0, ax + 5.0, az - 5.0, az + 5.0);
 
                 const model = KeralaVillageGenerator.createArecanutGroveModel();
-                model.position.set(ax, 0, az);
+                this.setModelPosition(model, ax, az);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -664,7 +677,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(bx - 5.0, bx + 5.0, bz - 5.0, bz + 5.0);
 
                 const model = KeralaVillageGenerator.createBananaGroveModel();
-                model.position.set(bx, 0, bz);
+                this.setModelPosition(model, bx, bz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -725,7 +738,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(sgx - 7.0, sgx + 7.0, sgz - 7.0, sgz + 7.0);
 
                 const model = KeralaVillageGenerator.createSacredGroveModel();
-                model.position.set(sgx, 0, sgz);
+                this.setModelPosition(model, sgx, sgz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -786,7 +799,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(lx - 5.5, lx + 5.5, lz - 4.0, lz + 4.0);
 
                 const model = KeralaHighlandGenerator.createLateriteCutModel();
-                model.position.set(lx, 0, lz);
+                this.setModelPosition(model, lx, lz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -847,7 +860,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(resX - 7.0, resX + 7.0, resZ - 5.5, resZ + 5.5);
 
                 const model = KeralaVillageGenerator.createResidentialCompoundParcelModel();
-                model.position.set(resX, 0, resZ);
+                this.setModelPosition(model, resX, resZ);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -908,7 +921,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(pdx - 7.5, pdx + 7.5, pdz - 5.5, pdz + 5.5);
 
                 const model = KeralaVillageGenerator.createPaddyFieldParcelModel();
-                model.position.set(pdx, 0, pdz);
+                this.setModelPosition(model, pdx, pdz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -969,7 +982,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(ccx - 6.5, ccx + 6.5, ccz - 5.0, ccz + 5.0);
 
                 const model = KeralaVillageGenerator.createCoconutPlantationPlotModel();
-                model.position.set(ccx, 0, ccz);
+                this.setModelPosition(model, ccx, ccz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -1030,7 +1043,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(rbx - 4.5, rbx + 4.5, rbz - 3.5, rbz + 3.5);
 
                 const model = KeralaVillageGenerator.createRubberProcessingShedModel();
-                model.position.set(rbx, 0, rbz);
+                this.setModelPosition(model, rbx, rbz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -1090,7 +1103,7 @@ export class KeralaVillageManager {
                 obstacleMap.registerCustomObstacle(ltx - 5.5, ltx + 5.5, ltz - 5.0, ltz + 5.0);
 
                 const model = KeralaVillageGenerator.createNaturalLotusPondModel();
-                model.position.set(ltx, 0, ltz);
+                this.setModelPosition(model, ltx, ltz);
 
                 this.scene.add(model);
                 this.items.set(key, model);
@@ -1151,7 +1164,7 @@ export class KeralaVillageManager {
                   obstacleMap.registerCustomObstacle(stx - 4.5, stx + 4.5, stz - 6.0, stz + 6.0);
 
                   const model = KeralaVillageGenerator.createStreamFootbridgeModel();
-                  model.position.set(stx, 0, stz);
+                  this.setModelPosition(model, stx, stz);
                   model.rotation.y = rotY;
 
                   this.scene.add(model);
@@ -1214,7 +1227,7 @@ export class KeralaVillageManager {
                   obstacleMap.registerCustomObstacle(wmx - 6.5, wmx + 6.5, wmz - 5.5, wmz + 5.5);
 
                   const model = KeralaVillageGenerator.createWetlandMangroveModel();
-                  model.position.set(wmx, 0, wmz);
+                  this.setModelPosition(model, wmx, wmz);
                   model.rotation.y = rotY;
 
                   this.scene.add(model);

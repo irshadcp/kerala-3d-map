@@ -47,7 +47,20 @@ export class KeralaHighlandManager {
     this.placedItems = [];
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  private getElevation?: (localX: number, localZ: number) => number;
+
+  private setModelPosition(model: THREE.Object3D, x: number, z: number) {
+    const y = this.getElevation ? this.getElevation(x, z) : 0;
+    model.position.set(x, y, z);
+  }
+
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) {
       return false;
     }
@@ -107,7 +120,7 @@ export class KeralaHighlandManager {
                 obstacleMap.registerCustomObstacle(cx - 5.0, cx + 5.0, cz - 3.5, cz + 3.5);
 
                 const model = KeralaHighlandGenerator.createCheckPostModel();
-                model.position.set(cx, 0, cz);
+                this.setModelPosition(model, cx, cz);
                 model.rotation.y = Math.atan2(tx, tz); // Align along roadway edge
 
                 this.scene.add(model);
@@ -162,7 +175,7 @@ export class KeralaHighlandManager {
                 obstacleMap.registerCustomObstacle(vx - 6.5, vx + 6.5, vz - 6.5, vz + 6.5);
 
                 const model = KeralaHighlandGenerator.createViewpointModel();
-                model.position.set(vx, 0, vz);
+                this.setModelPosition(model, vx, vz);
 
                 this.scene.add(model);
                 this.items.set(key, model);
@@ -216,7 +229,7 @@ export class KeralaHighlandManager {
                 obstacleMap.registerCustomObstacle(txPos - 3, txPos + 3, tzPos - 3, tzPos + 3);
 
                 const model = KeralaHighlandGenerator.createTeaClusterModel(6);
-                model.position.set(txPos, 0, tzPos);
+                this.setModelPosition(model, txPos, tzPos);
 
                 this.scene.add(model);
                 this.items.set(key, model);
@@ -273,7 +286,7 @@ export class KeralaHighlandManager {
                 obstacleMap.registerCustomObstacle(rx - 7.0, rx + 7.0, rz - 6.0, rz + 6.0);
 
                 const model = KeralaHighlandGenerator.createRockyGraniteOutcropModel();
-                model.position.set(rx, 0, rz);
+                this.setModelPosition(model, rx, rz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);
@@ -331,7 +344,7 @@ export class KeralaHighlandManager {
                 obstacleMap.registerCustomObstacle(lx - 5.5, lx + 5.5, lz - 4.0, lz + 4.0);
 
                 const model = KeralaHighlandGenerator.createLateriteCutModel();
-                model.position.set(lx, 0, lz);
+                this.setModelPosition(model, lx, lz);
                 model.rotation.y = rotY;
 
                 this.scene.add(model);

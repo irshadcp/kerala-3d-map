@@ -46,7 +46,20 @@ export class KeralaCoastalManager {
     this.placedItems = [];
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number): boolean {
+  private getElevation?: (localX: number, localZ: number) => number;
+
+  private setModelPosition(model: THREE.Object3D, x: number, z: number) {
+    const y = this.getElevation ? this.getElevation(x, z) : 0;
+    model.position.set(x, y, z);
+  }
+
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ): boolean {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady) {
       return false;
     }
@@ -142,7 +155,7 @@ export class KeralaCoastalManager {
             );
 
             const model = KeralaCoastalGenerator.createBreakwaterModel(42);
-            model.position.set(midX, 0, midZ);
+            this.setModelPosition(model, midX, midZ);
             model.rotation.y = bwAngle; // Point out into sea
 
             this.scene.add(model);
@@ -237,7 +250,7 @@ export class KeralaCoastalManager {
                   obstacleMap.registerCustomObstacle(swX - 13, swX + 13, swZ - 3, swZ + 3);
 
                   const model = KeralaCoastalGenerator.createSeawallModel(24);
-                  model.position.set(swX, 0, swZ);
+                  this.setModelPosition(model, swX, swZ);
                   model.rotation.y = roadAngle; // Perfectly parallel to road edge
 
                   this.scene.add(model);
@@ -296,7 +309,7 @@ export class KeralaCoastalManager {
                   obstacleMap.registerCustomObstacle(hx - 6, hx + 6, hz - 5.5, hz + 5.5);
 
                   const model = KeralaCoastalGenerator.createFishingHouseModel();
-                  model.position.set(hx, 0, hz);
+                  this.setModelPosition(model, hx, hz);
                   model.rotation.y = Math.atan2(-nx, -nz); // Face road
 
                   this.scene.add(model);
@@ -309,7 +322,7 @@ export class KeralaCoastalManager {
                   if (!obstacleMap.isPointInWater(rx, rz) && obstacleMap.isFootprintClear(rx, rz, 4, 2.5)) {
                     obstacleMap.registerCustomObstacle(rx - 4, rx + 4, rz - 2.5, rz + 2.5);
                     const rack = KeralaCoastalGenerator.createNetDryingRackModel();
-                    rack.position.set(rx, 0, rz);
+                    this.setModelPosition(rack, rx, rz);
                     rack.rotation.y = roadAngle;
                     this.scene.add(rack);
                     this.items.set(`${key}_rack`, rack);
@@ -321,7 +334,7 @@ export class KeralaCoastalManager {
                   if (!obstacleMap.isPointInWater(bx, bz) && obstacleMap.isFootprintClear(bx, bz, 4.5, 3.5)) {
                     obstacleMap.registerCustomObstacle(bx - 4.5, bx + 4.5, bz - 3.5, bz + 3.5);
                     const boats = KeralaCoastalGenerator.createBeachBoatsCluster();
-                    boats.position.set(bx, 0, bz);
+                    this.setModelPosition(boats, bx, bz);
                     this.scene.add(boats);
                     this.items.set(`${key}_boats`, boats);
                   }
@@ -379,7 +392,7 @@ export class KeralaCoastalManager {
                   obstacleMap.registerCustomObstacle(hbx - 14, hbx + 14, hbz - 10, hbz + 10);
 
                   const model = KeralaCoastalGenerator.createHarbourComplexModel();
-                  model.position.set(hbx, 0, hbz);
+                  this.setModelPosition(model, hbx, hbz);
                   model.rotation.y = roadAngle;
 
                   this.scene.add(model);

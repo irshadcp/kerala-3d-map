@@ -51,9 +51,15 @@ export class KeralaRoadsideManager {
   private bridgePositions: { x: number; z: number }[] = [];
   private billboardPositions: { x: number; z: number }[] = [];
   private autoStandPositions: { x: number; z: number }[] = [];
+  private getElevation?: (localX: number, localZ: number) => number;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+  }
+
+  private setModelPosition(model: THREE.Object3D, x: number, z: number) {
+    const y = this.getElevation ? this.getElevation(x, z) : 0;
+    model.position.set(x, y, z);
   }
 
   public clear() {
@@ -85,7 +91,13 @@ export class KeralaRoadsideManager {
     this.autoStandPositions = [];
   }
 
-  public update(obstacleMap: SpatialObstacleMap, originLat: number, originLng: number) {
+  public update(
+    obstacleMap: SpatialObstacleMap,
+    originLat: number,
+    originLng: number,
+    getElevation?: (localX: number, localZ: number) => number
+  ) {
+    this.getElevation = getElevation;
     if (!obstacleMap.isReady || obstacleMap.roads.length === 0) return;
 
     this.clear();
@@ -141,7 +153,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(px - 1.2, px + 1.2, pz - 1.2, pz + 1.2);
 
               const model = KeralaRoadsideGenerator.createConcretePoleModel();
-              model.position.set(px, 0, pz);
+              this.setModelPosition(model, px, pz);
               model.rotation.y = roadRot;
 
               this.scene.add(model);
@@ -185,7 +197,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(lx - 1.2, lx + 1.2, lz - 1.2, lz + 1.2);
 
               const model = KeralaRoadsideGenerator.createStreetLightModel();
-              model.position.set(lx, 0, lz);
+              this.setModelPosition(model, lx, lz);
               // Luminaire arm points towards road carriageway
               model.rotation.y = Math.atan2(-snx, -snz);
 
@@ -231,7 +243,7 @@ export class KeralaRoadsideManager {
 
               const signType = itemsPlaced % 3 === 0 ? 'direction' : (itemsPlaced % 3 === 1 ? 'warning' : 'speed');
               const model = KeralaRoadsideGenerator.createRoadSignModel(signType);
-              model.position.set(rx, 0, rz);
+              this.setModelPosition(model, rx, rz);
               model.rotation.y = roadRot + Math.PI / 2;
 
               this.scene.add(model);
@@ -276,7 +288,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(bx - 4.5, bx + 4.5, bz - 2.8, bz + 2.8);
 
               const model = KeralaRoadsideGenerator.createBusStopModel();
-              model.position.set(bx, 0, bz);
+              this.setModelPosition(model, bx, bz);
               model.rotation.y = rotY;
 
               this.scene.add(model);
@@ -321,7 +333,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(shx - 3.0, shx + 3.0, shz - 2.5, shz + 2.5);
 
               const model = KeralaRoadsideGenerator.createSmallShopModel();
-              model.position.set(shx, 0, shz);
+              this.setModelPosition(model, shx, shz);
               model.rotation.y = rotY;
 
               this.scene.add(model);
@@ -366,7 +378,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(tax - 3.8, tax + 3.8, taz - 3.2, taz + 3.2);
 
               const model = KeralaRoadsideGenerator.createTeaShopModel();
-              model.position.set(tax, 0, taz);
+              this.setModelPosition(model, tax, taz);
               model.rotation.y = rotY;
 
               this.scene.add(model);
@@ -411,7 +423,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(bkx - 4.2, bkx + 4.2, bkz - 3.5, bkz + 3.5);
 
               const model = KeralaRoadsideGenerator.createBakeryModel();
-              model.position.set(bkx, 0, bkz);
+              this.setModelPosition(model, bkx, bkz);
               model.rotation.y = rotY;
 
               this.scene.add(model);
@@ -456,7 +468,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(phx - 4.2, phx + 4.2, phz - 3.4, phz + 3.4);
 
               const model = KeralaRoadsideGenerator.createPharmacyModel();
-              model.position.set(phx, 0, phz);
+              this.setModelPosition(model, phx, phz);
               model.rotation.y = rotY;
 
               this.scene.add(model);
@@ -500,7 +512,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(cwx - 5.5, cwx + 5.5, cwz - 0.8, cwz + 0.8);
 
               const model = KeralaRoadsideGenerator.createCompoundWallModel();
-              model.position.set(cwx, 0, cwz);
+              this.setModelPosition(model, cwx, cwz);
               model.rotation.y = roadRot;
 
               this.scene.add(model);
@@ -544,7 +556,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(gtx - 3.2, gtx + 3.2, gtz - 1.2, gtz + 1.2);
 
               const model = KeralaRoadsideGenerator.createGateModel();
-              model.position.set(gtx, 0, gtz);
+              this.setModelPosition(model, gtx, gtz);
               model.rotation.y = roadRot;
 
               this.scene.add(model);
@@ -588,7 +600,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(drx - 6.0, drx + 6.0, drz - 1.0, drz + 1.0);
 
               const model = KeralaRoadsideGenerator.createDrainModel();
-              model.position.set(drx, 0, drz);
+              this.setModelPosition(model, drx, drz);
               model.rotation.y = roadRot;
 
               this.scene.add(model);
@@ -634,7 +646,7 @@ export class KeralaRoadsideManager {
                 obstacleMap.registerCustomObstacle(clx - 3.5, clx + 3.5, clz - 2.2, clz + 2.2);
 
                 const model = KeralaRoadsideGenerator.createCulvertModel();
-                model.position.set(clx, 0, clz);
+                this.setModelPosition(model, clx, clz);
                 model.rotation.y = roadRot;
 
                 this.scene.add(model);
@@ -678,7 +690,7 @@ export class KeralaRoadsideManager {
                 obstacleMap.registerCustomObstacle(bgx - 9.0, bgx + 9.0, bgz - 4.0, bgz + 4.0);
 
                 const model = KeralaRoadsideGenerator.createBridgeModel();
-                model.position.set(bgx, 0, bgz);
+                this.setModelPosition(model, bgx, bgz);
                 model.rotation.y = roadRot;
 
                 this.scene.add(model);
@@ -723,7 +735,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(blx - 6.0, blx + 6.0, blz - 3.0, blz + 3.0);
 
               const model = KeralaRoadsideGenerator.createBillboardModel();
-              model.position.set(blx, 0, blz);
+              this.setModelPosition(model, blx, blz);
               model.rotation.y = roadRot;
 
               this.scene.add(model);
@@ -768,7 +780,7 @@ export class KeralaRoadsideManager {
               obstacleMap.registerCustomObstacle(ax - 5.2, ax + 5.2, az - 3.0, az + 3.0);
 
               const model = KeralaRoadsideGenerator.createAutoStandModel();
-              model.position.set(ax, 0, az);
+              this.setModelPosition(model, ax, az);
               model.rotation.y = rotY;
 
               this.scene.add(model);

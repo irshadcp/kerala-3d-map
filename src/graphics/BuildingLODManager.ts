@@ -73,7 +73,8 @@ export class BuildingLODManager {
     obstacleMap: SpatialObstacleMap,
     playerX: number,
     playerZ: number,
-    force = false
+    force = false,
+    getElevation?: (localX: number, localZ: number) => number
   ) {
     if (!obstacleMap || !obstacleMap.isReady) return;
 
@@ -105,7 +106,7 @@ export class BuildingLODManager {
       activeKeys.add(key);
 
       if (!this.activeBuildings.has(key)) {
-        const item = this.createBuildingLOD(b);
+        const item = this.createBuildingLOD(b, getElevation);
         if (item) {
           this.container.add(item.group);
           this.activeBuildings.set(key, item);
@@ -125,7 +126,10 @@ export class BuildingLODManager {
     }
   }
 
-  private createBuildingLOD(b: BuildingObstacle): ActiveBuildingLOD | null {
+  private createBuildingLOD(
+    b: BuildingObstacle,
+    getElevation?: (localX: number, localZ: number) => number
+  ): ActiveBuildingLOD | null {
     const ring = b.rings?.[0];
     if (!ring || ring.length < 3) return null;
 
@@ -185,7 +189,8 @@ export class BuildingLODManager {
         group.add(roofMesh);
       }
 
-      group.position.set(centerX, 0, centerZ);
+      const groundY = getElevation ? getElevation(centerX, centerZ) : 0;
+      group.position.set(centerX, groundY, centerZ);
       return { group, geometries };
     } catch {
       // Discard on any non-manifold or self-intersecting polygon
