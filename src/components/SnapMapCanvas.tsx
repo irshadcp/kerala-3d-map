@@ -618,7 +618,11 @@ export const SnapMapCanvas = forwardRef<SnapMapCanvasRef, SnapMapCanvasProps>(
           maxPitch: 85,
           minPitch: 0,
           maxZoom: 24,
-          minZoom: 6, // Allows full view of entire Kerala state and all player pins
+          minZoom: 6.8, // Confined strictly to Kerala state
+          maxBounds: [
+            [74.6, 8.0], // Southwest corner (South of Parassala / Poovar)
+            [77.7, 12.95], // Northeast corner (North of Manjeshwaram / Kasaragod)
+          ],
           dragRotate: false,
           pitchWithRotate: false,
           touchZoomRotate: false,

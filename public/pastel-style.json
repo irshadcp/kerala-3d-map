@@ -203,68 +203,15 @@
       }
     },
     {
-      "id": "2d-buildings",
+      "id": "building",
       "type": "fill",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 16.0,
-      "maxzoom": 16.5,
+      "minzoom": 15.5,
       "paint": {
-        "fill-color": "#c2410c",
-        "fill-outline-color": "#9a3412",
-        "fill-opacity": 0.85
-      }
-    },
-    {
-      "id": "3d-buildings",
-      "type": "fill-extrusion",
-      "source": "openmaptiles",
-      "source-layer": "building",
-      "minzoom": 16.2,
-      "paint": {
-        "fill-extrusion-color": [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "render_height"], ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 1.5], 4.2], 8],
-          3, "#fef3c7",
-          6, "#c2410c",
-          8, "#ea580c",
-          12, "#d97706",
-          18, "#e2d9cc",
-          28, "#cbd5e1",
-          50, "#94a3b8"
-        ],
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          16.2, 0,
-          16.6, [
-            "max",
-            [
-              "+",
-              [
-                "coalesce",
-                ["get", "render_height"],
-                ["get", "height"],
-                ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 1.5], 4.2],
-                10.0
-              ],
-              8.0
-            ],
-            18.0
-          ]
-        ],
-        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          16.2, 0,
-          16.5, 0.96,
-          19, 0.95
-        ],
-        "fill-extrusion-vertical-gradient": true
+        "fill-color": "#ea580c",
+        "fill-outline-color": "#c2410c",
+        "fill-opacity": 0.45
       }
     },
     {

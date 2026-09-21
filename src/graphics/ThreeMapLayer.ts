@@ -15,7 +15,8 @@ import { KeralaCoastalManager } from './KeralaCoastalManager';
 import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
 import { PlayerVehicle } from './PlayerVehicle';
-import { BuildingLODManager } from './BuildingLODManager';
+import { KeralaHouseManager } from './KeralaHouseManager';
+import { KeralaBillboardManager } from './KeralaBillboardManager';
 import { KeralaWaterAnimationManager } from './KeralaWaterAnimationManager';
 import { KeralaMountainAtmosphere } from './KeralaMountainAtmosphere';
 import { RemotePlayerManager } from './RemotePlayerManager';
@@ -41,7 +42,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private urbanManager!: KeralaUrbanManager;
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
-  private buildingLODManager!: BuildingLODManager;
+  private keralaHouseManager!: KeralaHouseManager;
+  private keralaBillboardManager!: KeralaBillboardManager;
   private waterAnimationManager!: KeralaWaterAnimationManager;
   private mountainAtmosphere!: KeralaMountainAtmosphere;
   public playerVehicle!: PlayerVehicle;
@@ -63,6 +65,12 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   public getTerrainElevation(lat: number, lng: number): number {
     if (!this.map) return 0;
     try {
+      if (typeof (this.map as any).queryTerrainElevation === 'function') {
+        const elev = (this.map as any).queryTerrainElevation([lng, lat]);
+        if (typeof elev === 'number' && !isNaN(elev)) {
+          return elev;
+        }
+      }
       const terrain = (this.map as any).terrain;
       if (terrain && typeof terrain.getElevationForLngLatZoom === 'function') {
         const tileZoom = (this.map as any).transform?.tileZoom ?? Math.floor(this.map.getZoom());
@@ -120,6 +128,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
 
       // 2. Re-evaluate landmark managers with elevation sampling
       const getElev = (x: number, z: number) => this.getElevationAtLocal(x, z);
+      this.keralaBillboardManager?.refreshElevations(getElev);
+      this.keralaHouseManager?.refreshElevations(getElev);
+
       if (this.obstacleMap && this.obstacleMap.isReady) {
         this.petrolStationManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
         this.busStopManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
@@ -130,7 +141,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.urbanManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
         this.coastalManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
         this.roadsideManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
-        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+        this.keralaHouseManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+        this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, getElev);
         this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
         this.mountainAtmosphere?.update(local.x, local.z, getElev);
       }
@@ -244,7 +256,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.urbanManager = new KeralaUrbanManager(envGroup);
     this.coastalManager = new KeralaCoastalManager(envGroup);
     this.roadsideManager = new KeralaRoadsideManager(envGroup);
-    this.buildingLODManager = new BuildingLODManager(this.scene);
+    this.keralaHouseManager = new KeralaHouseManager(this.scene);
+    this.keralaBillboardManager = new KeralaBillboardManager(this.scene);
     this.waterAnimationManager = new KeralaWaterAnimationManager(this.scene);
     this.mountainAtmosphere = new KeralaMountainAtmosphere(this.scene);
     this.remotePlayerManager = new RemotePlayerManager(this.scene);
@@ -332,8 +345,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
           this.updateChunks(local.x, local.z);
 
-          // 11. Dynamic Proximity Building LOD, Animated Water & Mountain Atmosphere
-          this.buildingLODManager.update(this.obstacleMap, local.x, local.z, true, getElev);
+          // 11. Authentic Kerala Houses, Malayalam Billboards, Water & Atmosphere
+          this.keralaHouseManager.update(this.obstacleMap, local.x, local.z, true, getElev);
+          this.keralaBillboardManager.update(this.originLat, this.originLng, this.playerLat, this.playerLng, getElev);
           this.waterAnimationManager.update(this.obstacleMap, local.x, local.z, true, getElev);
           this.mountainAtmosphere.update(local.x, local.z, getElev);
         }
@@ -371,7 +385,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       if (this.playerAvatarGroup) {
         this.playerAvatarGroup.position.set(local.x, yOffset, local.z);
         this.updateChunks(local.x, local.z);
-        this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, false, (x, z) => this.getElevationAtLocal(x, z));
+        this.keralaHouseManager?.update(this.obstacleMap, local.x, local.z, false, (x, z) => this.getElevationAtLocal(x, z));
+        this.keralaBillboardManager?.update(this.originLat, this.originLng, lat, lng, (x, z) => this.getElevationAtLocal(x, z));
       }
     }
   }
@@ -537,7 +552,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.urbanManager?.clear();
     this.coastalManager?.clear();
     this.roadsideManager?.clear();
-    this.buildingLODManager?.clear();
+    this.keralaHouseManager?.clear();
+    this.keralaBillboardManager?.clear();
     this.waterAnimationManager?.clear();
     this.mountainAtmosphere?.clear();
     this.remotePlayerManager?.onOriginChange(lat, lng);
@@ -631,8 +647,9 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       }
     }
 
-    // Dynamic Distance-based Building LOD, Animated Water & Mountain Atmosphere
-    this.buildingLODManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
+    // Dynamic Distance-based Kerala Houses, Billboard Gates, Animated Water & Mountain Atmosphere
+    this.keralaHouseManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
+    this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, (x, z) => this.getElevationAtLocal(x, z));
     this.waterAnimationManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
     this.mountainAtmosphere?.update(playerX, playerZ, (x, z) => this.getElevationAtLocal(x, z));
   }
@@ -796,7 +813,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.lastChunkCheckZ = this.currentPos.y;
         this.updateChunks(this.currentPos.x, this.currentPos.y);
       }
-      this.buildingLODManager?.update(this.obstacleMap, this.currentPos.x, this.currentPos.y, false, (x, z) => this.getElevationAtLocal(x, z));
+      this.keralaHouseManager?.update(this.obstacleMap, this.currentPos.x, this.currentPos.y, false, (x, z) => this.getElevationAtLocal(x, z));
+      this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, (x, z) => this.getElevationAtLocal(x, z));
       return true;
     }
     return false;
@@ -932,12 +950,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     if (is3D) {
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
-      this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
+      this.keralaHouseManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
+      this.keralaBillboardManager?.update(this.originLat, this.originLng, this.playerLat, this.playerLng, (x, z) => this.getElevationAtLocal(x, z));
       this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
       this.mountainAtmosphere?.update(local.x, local.z, (x, z) => this.getElevationAtLocal(x, z));
       this.map?.triggerRepaint();
     } else {
-      this.buildingLODManager?.clear();
+      this.keralaHouseManager?.clear();
+      this.keralaBillboardManager?.clear();
       this.waterAnimationManager?.clear();
       this.mountainAtmosphere?.clear();
       this.map?.triggerRepaint();
@@ -949,7 +969,7 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.isLowEndMode = isLowEnd;
     this.LOAD_RADIUS = isLowEnd ? 120 : 180;
     SnapTreeGenerator.setLowEndMode(isLowEnd);
-    this.buildingLODManager?.setPerformanceMode(isLowEnd);
+    this.keralaHouseManager?.setPerformanceMode(isLowEnd);
 
     // Refresh chunks with new LOD & radius if 3D is active
     if (this.is3DActive) {
