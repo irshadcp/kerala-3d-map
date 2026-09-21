@@ -16,6 +16,8 @@ import { KeralaRoadsideManager } from './KeralaRoadsideManager';
 import { RealisticCharacter } from './RealisticCharacter';
 import { PlayerVehicle } from './PlayerVehicle';
 import { BuildingLODManager } from './BuildingLODManager';
+import { KeralaWaterAnimationManager } from './KeralaWaterAnimationManager';
+import { KeralaMountainAtmosphere } from './KeralaMountainAtmosphere';
 import { RemotePlayerManager } from './RemotePlayerManager';
 import { PlayerNameplate } from './PlayerNameplate';
 
@@ -40,6 +42,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
   private coastalManager!: KeralaCoastalManager;
   private roadsideManager!: KeralaRoadsideManager;
   private buildingLODManager!: BuildingLODManager;
+  private waterAnimationManager!: KeralaWaterAnimationManager;
+  private mountainAtmosphere!: KeralaMountainAtmosphere;
   public playerVehicle!: PlayerVehicle;
   public isDrivingState: boolean = false;
   public remotePlayerManager!: RemotePlayerManager;
@@ -127,6 +131,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
         this.coastalManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
         this.roadsideManager?.update(this.obstacleMap, this.originLat, this.originLng, getElev);
         this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+        this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, getElev);
+        this.mountainAtmosphere?.update(local.x, local.z, getElev);
       }
     }
     this.map?.triggerRepaint();
@@ -187,19 +193,19 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     });
     this.renderer.autoClear = false;
 
-    // Crisp, balanced lighting for high-contrast 3D clarity
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
+    // Bright, vibrant tropical daylight for lush colorful Kerala world
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.58);
     this.scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0xa7f3d0, 0.42);
+    const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0xbbf7d0, 0.52);
     this.scene.add(hemiLight);
 
-    const topSunLight = new THREE.DirectionalLight(0xfff8e7, 1.15);
+    const topSunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
     topSunLight.position.set(100, 260, 90);
     this.scene.add(topSunLight);
 
-    // Deep atmospheric distance horizon fog (near 180m, far 650m) keeping gameplay crisp
-    this.scene.fog = new THREE.Fog(0xdbeafe, 180, 650);
+    // Deep atmospheric distance horizon fog (near 220m, far 750m) keeping gameplay crisp & colorful
+    this.scene.fog = new THREE.Fog(0xe0f2fe, 220, 750);
 
     // Grounded Realistic 3D Human Character (Deleted old floating pin badge)
     this.playerAvatarGroup = new THREE.Group();
@@ -239,6 +245,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.coastalManager = new KeralaCoastalManager(envGroup);
     this.roadsideManager = new KeralaRoadsideManager(envGroup);
     this.buildingLODManager = new BuildingLODManager(this.scene);
+    this.waterAnimationManager = new KeralaWaterAnimationManager(this.scene);
+    this.mountainAtmosphere = new KeralaMountainAtmosphere(this.scene);
     this.remotePlayerManager = new RemotePlayerManager(this.scene);
 
     if (typeof window !== 'undefined') {
@@ -324,8 +332,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
           const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
           this.updateChunks(local.x, local.z);
 
-          // 11. Dynamic Proximity Building LOD: generate rich roof parapet & ground AO plinths for nearby buildings
+          // 11. Dynamic Proximity Building LOD, Animated Water & Mountain Atmosphere
           this.buildingLODManager.update(this.obstacleMap, local.x, local.z, true, getElev);
+          this.waterAnimationManager.update(this.obstacleMap, local.x, local.z, true, getElev);
+          this.mountainAtmosphere.update(local.x, local.z, getElev);
         }
       }, 450);
     };
@@ -528,6 +538,8 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
     this.coastalManager?.clear();
     this.roadsideManager?.clear();
     this.buildingLODManager?.clear();
+    this.waterAnimationManager?.clear();
+    this.mountainAtmosphere?.clear();
     this.remotePlayerManager?.onOriginChange(lat, lng);
 
     for (const group of this.loadedChunks.values()) {
@@ -619,8 +631,10 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       }
     }
 
-    // Dynamic Distance-based Building LOD
+    // Dynamic Distance-based Building LOD, Animated Water & Mountain Atmosphere
     this.buildingLODManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
+    this.waterAnimationManager?.update(this.obstacleMap, playerX, playerZ, false, (x, z) => this.getElevationAtLocal(x, z));
+    this.mountainAtmosphere?.update(playerX, playerZ, (x, z) => this.getElevationAtLocal(x, z));
   }
 
   public updateTapMovement(delta: number): boolean {
@@ -834,6 +848,14 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       this.maritimeManager.updateFloatingAnimation(now);
     }
 
+    // Real-time river ripples, sun glint caustics & atmospheric mountain mist
+    if (this.waterAnimationManager) {
+      this.waterAnimationManager.tick(now);
+    }
+    if (this.mountainAtmosphere) {
+      this.mountainAtmosphere.tick(now);
+    }
+
     // Update remote multiplayer characters & proximity audio
     if (this.remotePlayerManager) {
       this.remotePlayerManager.update(
@@ -911,9 +933,13 @@ export class ThreeMapLayer implements maplibregl.CustomLayerInterface {
       const local = GeoCoords.toLocalMeters(this.playerLat, this.playerLng, this.originLat, this.originLng);
       this.updateChunks(local.x, local.z);
       this.buildingLODManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
+      this.waterAnimationManager?.update(this.obstacleMap, local.x, local.z, true, (x, z) => this.getElevationAtLocal(x, z));
+      this.mountainAtmosphere?.update(local.x, local.z, (x, z) => this.getElevationAtLocal(x, z));
       this.map?.triggerRepaint();
     } else {
       this.buildingLODManager?.clear();
+      this.waterAnimationManager?.clear();
+      this.mountainAtmosphere?.clear();
       this.map?.triggerRepaint();
     }
   }

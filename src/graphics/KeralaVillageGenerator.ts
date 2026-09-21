@@ -10,13 +10,13 @@ export class KeralaVillageGenerator {
     shop.name = 'kerala_chayakada';
 
     // Materials
-    const tileMat = new THREE.MeshLambertMaterial({ color: 0xb45309 }); // Terracotta tile orange-brown
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xea580c }); // Bright warm terracotta tile
     const woodMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Kerala dark timber
-    const lightWoodMat = new THREE.MeshLambertMaterial({ color: 0x92400e });
-    const wallMat = new THREE.MeshLambertMaterial({ color: 0xfef08a }); // Light yellow painted village stall
-    const silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.2, metalness: 0.8 }); // Samovar metal
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
-    const snackMat = new THREE.MeshLambertMaterial({ color: 0xf59e0b }); // Banana chips / pazham pori gold
+    const lightWoodMat = new THREE.MeshLambertMaterial({ color: 0xb45309 });
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xfef9c3 }); // Bright sunny warm cream stall
+    const silverMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.15, metalness: 0.85 }); // Samovar metal
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
+    const snackMat = new THREE.MeshLambertMaterial({ color: 0xfbbf24 }); // Banana chips / pazham pori bright gold
 
     // Main Room Body (3.8m wide x 2.6m deep x 2.4m high)
     const wallGeo = new THREE.BoxGeometry(3.8, 2.4, 2.6);
@@ -361,8 +361,9 @@ export class KeralaVillageGenerator {
     const house = new THREE.Group();
     house.name = 'kerala_small_tiled_house';
 
-    const wallMat = new THREE.MeshLambertMaterial({ color: 0xfefce8 }); // Warm whitewash cream
-    const tileMat = new THREE.MeshLambertMaterial({ color: 0xb45309 }); // Terracotta tiles
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xfefce8 }); // Bright warm whitewash cream
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xea580c }); // Rich warm terracotta clay tiles
+    const ridgeTileMat = new THREE.MeshLambertMaterial({ color: 0xc2410c }); // Burnt terracotta ridge
     const woodMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Dark teak timber
     const stoneMat = new THREE.MeshLambertMaterial({ color: 0x78716c }); // Laterite stone compound wall
     const tankMat = new THREE.MeshLambertMaterial({ color: 0x0f172a }); // Black Sintex water tank
@@ -381,6 +382,13 @@ export class KeralaVillageGenerator {
     roof.rotation.y = Math.PI / 4;
     roof.scale.set(1.3, 1, 1.15);
     house.add(roof);
+
+    // Terracotta Apex Ridge Cap (ഓട് വരമ്പ്)
+    const ridgeGeo = new THREE.CylinderGeometry(0.14, 0.14, 4.2, 8);
+    ridgeGeo.rotateZ(Math.PI / 2);
+    const ridge = new THREE.Mesh(ridgeGeo, ridgeTileMat);
+    ridge.position.set(0, 4.75, -0.5);
+    house.add(ridge);
 
     // Front Veranda / Poomukham (പൂമുഖം / വരാന്ത)
     const verandaRoofGeo = new THREE.BoxGeometry(4.8, 0.12, 1.8);

@@ -8,18 +8,15 @@ interface ActiveBuildingLOD {
 
 /**
  * BuildingLODManager
- * Dynamically provides Distance-based Level of Detail (LOD) for buildings in Kerala.
+ * Dynamically provides realistic Kerala architectural models with soft curved/beveled
+ * edges, traditional sloping terracotta tile roofs, front verandas (പൂമുഖം), and
+ * round support pillars.
  * 
- * - LOD 0 (High Quality, 0-45m mobile / 0-65m desktop):
- *   For the closest buildings immediately around the player, creates rich architectural
- *   roof parapet cornices (Kerala terracotta & modern slate) and ground ambient occlusion
- *   contact plinths that ground the buildings to the terrain.
- * 
- * - LOD 1 (Medium Quality, 45-120m):
- *   Buildings outside the inner ring remain clean, lightweight volumetric 3D boxes
- *   rendered by MapLibre vector extrusions without any decorative mesh overhead.
- * 
- * - Strictly respects user constraint: Zero windows or doors are generated.
+ * - Soft Curved Geometry: Eliminates harsh blocky edges with smooth beveled fillets
+ * - Kerala Residential Houses: Authentic sloped hipped roofs, eaves, and verandas
+ * - Commercial Buildings: Soft curved modern parapets and storefront awnings
+ * - Ground Contact Plinths: Smooth ambient occlusion grounding skirts
+ * - Zero windows or doors generated (strictly respects user constraint)
  */
 export class BuildingLODManager {
   private scene: THREE.Scene;
@@ -30,11 +27,14 @@ export class BuildingLODManager {
   private lastUpdateZ = -99999;
 
   private isPerformanceMode = false;
-  private lodRadius = 45; // meters around character
+  private lodRadius = 48; // meters around character
 
   // Reusable materials
   private terracottaRoofMat: THREE.MeshLambertMaterial;
+  private ridgeTileMat: THREE.MeshLambertMaterial;
   private commercialRoofMat: THREE.MeshLambertMaterial;
+  private pillarMat: THREE.MeshLambertMaterial;
+  private awningMat: THREE.MeshLambertMaterial;
   private groundAoMat: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene) {
@@ -42,9 +42,14 @@ export class BuildingLODManager {
     this.container.name = 'BuildingLODContainer';
     this.scene.add(this.container);
 
-    // Kerala clay terracotta roof cornice
+    // Warm, rich Kerala clay terracotta roof tile
     this.terracottaRoofMat = new THREE.MeshLambertMaterial({
-      color: 0xc2410c, // Rich Kerala warm clay tile tone
+      color: 0xea580c, // Bright warm terracotta tile
+    });
+
+    // Deep terracotta ridge capping
+    this.ridgeTileMat = new THREE.MeshLambertMaterial({
+      color: 0xc2410c, // Rich burnt clay ridge tone
     });
 
     // Modern slate commercial parapet cornice
@@ -52,21 +57,29 @@ export class BuildingLODManager {
       color: 0x475569, // Slate graphite tone
     });
 
+    // Veranda round pillar material (Traditional whitewashed cream / teak)
+    this.pillarMat = new THREE.MeshLambertMaterial({
+      color: 0xfef9c3, // Ivory whitewash pillar
+    });
+
+    // Commercial storefront canopy awning
+    this.awningMat = new THREE.MeshLambertMaterial({
+      color: 0x0284c7, // Vibrant Kerala azure canopy
+    });
+
     // Soft ground contact ambient occlusion plinth
     this.groundAoMat = new THREE.MeshBasicMaterial({
       color: 0x0f172a,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.38,
       depthWrite: false,
     });
   }
 
   public setPerformanceMode(isPerformance: boolean) {
     this.isPerformanceMode = isPerformance;
-    // On budget mobiles: smaller radius (32m, ~6-10 buildings max)
-    // On balanced/desktop: broader radius (55m, ~15-20 buildings)
-    this.lodRadius = isPerformance ? 32 : 55;
-    this.lastUpdateX = -99999; // force recalculation
+    this.lodRadius = isPerformance ? 34 : 58;
+    this.lastUpdateX = -99999;
   }
 
   public update(
@@ -78,7 +91,6 @@ export class BuildingLODManager {
   ) {
     if (!obstacleMap || !obstacleMap.isReady) return;
 
-    // Throttle checks: only update when player moves more than 7 meters
     const distMoved = Math.hypot(playerX - this.lastUpdateX, playerZ - this.lastUpdateZ);
     if (!force && distMoved < 7) {
       return;
@@ -87,7 +99,6 @@ export class BuildingLODManager {
     this.lastUpdateX = playerX;
     this.lastUpdateZ = playerZ;
 
-    // Query OSM buildings within the dynamic inner LOD radius around the character
     const nearbyBuildings = obstacleMap.getBuildingsInRadius(
       playerX,
       playerZ,
@@ -95,8 +106,7 @@ export class BuildingLODManager {
       true // osmOnly
     );
 
-    // Limit maximum concurrent high-detail buildings for rock-solid 60 FPS
-    const maxBuildings = this.isPerformanceMode ? 10 : 22;
+    const maxBuildings = this.isPerformanceMode ? 12 : 24;
     const candidateBuildings = nearbyBuildings.slice(0, maxBuildings);
 
     const activeKeys = new Set<string>();
@@ -121,7 +131,7 @@ export class BuildingLODManager {
       }
     }
 
-    // Unload buildings that have moved outside the character's proximity ring
+    // Unload buildings that moved outside proximity ring
     for (const [key, item] of this.activeBuildings.entries()) {
       if (!activeKeys.has(key)) {
         this.container.remove(item.group);
@@ -146,6 +156,8 @@ export class BuildingLODManager {
     try {
       const centerX = (b.minX + b.maxX) * 0.5;
       const centerZ = (b.minZ + b.maxZ) * 0.5;
+      const width = Math.max(3, b.maxX - b.minX);
+      const depth = Math.max(3, b.maxZ - b.minZ);
 
       const shape = new THREE.Shape();
       shape.moveTo(ring[0].x - centerX, -(ring[0].z - centerZ));
@@ -154,53 +166,146 @@ export class BuildingLODManager {
       }
       shape.closePath();
 
-      // 1. Ground Contact Ambient Occlusion Rim (soft ground shadow base)
+      // 1. Soft Ground Contact Ambient Occlusion Rim (soft curved ground skirt)
       const groundGeo = new THREE.ShapeGeometry(shape);
       groundGeo.rotateX(Math.PI / 2);
       geometries.push(groundGeo);
 
       const groundMesh = new THREE.Mesh(groundGeo, this.groundAoMat);
       groundMesh.position.set(0, 0.04, 0);
-      groundMesh.scale.set(1.06, 1, 1.06); // subtle outward soft margin
+      groundMesh.scale.set(1.08, 1, 1.08); // soft outward margin
       group.add(groundMesh);
 
-      // 2. High-Fidelity Roof Parapet Cornice Cap (aligned with 18m minimum fill-extrusion)
-      const roofHeight = Math.max(18.0, (b.height || 8.0) + 8.0);
-      const roofMat = b.isCommercial ? this.commercialRoofMat : this.terracottaRoofMat;
+      // Roof base height matching the 18m minimum fill-extrusion
+      const roofBaseHeight = Math.max(18.0, (b.height || 8.0) + 8.0);
 
-      if (this.isPerformanceMode) {
-        // Ultra-lightweight flat roof parapet cap for budget devices
-        const roofGeo = new THREE.ShapeGeometry(shape);
-        roofGeo.rotateX(Math.PI / 2);
-        geometries.push(roofGeo);
-
-        const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-        roofMesh.position.set(0, roofHeight + 0.15, 0);
-        roofMesh.scale.set(1.02, 1, 1.02);
-        group.add(roofMesh);
-      } else {
-        // Architectural beveled parapet cornice for desktop / high-end devices
-        const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-          depth: 0.45,
+      if (b.isCommercial) {
+        // ==========================================
+        // COMMERCIAL / RETAIL BUILDING (വ്യാപാര കെട്ടിടം)
+        // Soft rounded parapet cornices & modern storefront canopy
+        // ==========================================
+        const parapetExtrude: THREE.ExtrudeGeometryOptions = {
+          depth: 0.5,
           bevelEnabled: true,
-          bevelSegments: 1,
-          bevelSize: 0.18,
-          bevelThickness: 0.2,
+          bevelSegments: this.isPerformanceMode ? 1 : 3,
+          bevelSize: 0.32,
+          bevelThickness: 0.25,
         };
-        const roofGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        roofGeo.rotateX(Math.PI / 2);
-        geometries.push(roofGeo);
+        const parapetGeo = new THREE.ExtrudeGeometry(shape, parapetExtrude);
+        parapetGeo.rotateX(Math.PI / 2);
+        geometries.push(parapetGeo);
 
-        const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-        roofMesh.position.set(0, roofHeight + 0.35, 0);
-        group.add(roofMesh);
+        const parapetMesh = new THREE.Mesh(parapetGeo, this.commercialRoofMat);
+        parapetMesh.position.set(0, roofBaseHeight + 0.3, 0);
+        group.add(parapetMesh);
+
+        // Soft curved entrance awning along the wider side
+        const awningWidth = Math.min(width * 0.7, 7.0);
+        const awningDepth = 2.2;
+        const awningGeo = new THREE.CylinderGeometry(
+          awningWidth * 0.5,
+          awningWidth * 0.5,
+          awningDepth,
+          this.isPerformanceMode ? 6 : 10,
+          1,
+          false,
+          0,
+          Math.PI
+        );
+        awningGeo.rotateZ(Math.PI / 2);
+        geometries.push(awningGeo);
+
+        const awningMesh = new THREE.Mesh(awningGeo, this.awningMat);
+        awningMesh.position.set(0, 3.4, depth * 0.5 + 0.8);
+        awningMesh.scale.set(1, 0.25, 1);
+        group.add(awningMesh);
+      } else {
+        // ==========================================
+        // AUTHENTIC KERALA RESIDENTIAL HOUSE (കേരളീയ വീട്)
+        // Sloping Terracotta Tiled Hipped Roof + Poomukham Veranda
+        // ==========================================
+
+        // 1. Lower Eaves Overhang (ഇറയം) with Soft Curved Beveled Edges
+        const eaveExtrude: THREE.ExtrudeGeometryOptions = {
+          depth: 0.42,
+          bevelEnabled: true,
+          bevelSegments: this.isPerformanceMode ? 2 : 3,
+          bevelSize: 0.38, // Smooth rounded curved eave edge
+          bevelThickness: 0.3,
+        };
+        const eaveGeo = new THREE.ExtrudeGeometry(shape, eaveExtrude);
+        eaveGeo.rotateX(Math.PI / 2);
+        geometries.push(eaveGeo);
+
+        const eaveMesh = new THREE.Mesh(eaveGeo, this.terracottaRoofMat);
+        eaveMesh.position.set(0, roofBaseHeight + 0.2, 0);
+        eaveMesh.scale.set(1.05, 1, 1.05); // overhang beyond building walls
+        group.add(eaveMesh);
+
+        // 2. Upper Pitch Hipped Terracotta Roof
+        const roofPitchHeight = Math.min(3.6, Math.max(2.2, Math.min(width, depth) * 0.38));
+        const hippedGeo = new THREE.ConeGeometry(
+          Math.max(width, depth) * 0.62,
+          roofPitchHeight,
+          4 // 4-sided hipped pyramid pitch
+        );
+        hippedGeo.rotateY(Math.PI / 4);
+        geometries.push(hippedGeo);
+
+        const hippedMesh = new THREE.Mesh(hippedGeo, this.terracottaRoofMat);
+        hippedMesh.position.set(0, roofBaseHeight + 0.4 + roofPitchHeight * 0.5, 0);
+        hippedMesh.scale.set(width / Math.max(width, depth), 1, depth / Math.max(width, depth));
+        group.add(hippedMesh);
+
+        // 3. Terracotta Ridge Cap (ഓട് വരമ്പ്) along the peak
+        const ridgeLength = Math.max(1.8, Math.abs(width - depth) * 0.8 + 1.2);
+        const ridgeGeo = new THREE.CylinderGeometry(0.16, 0.16, ridgeLength, 8);
+        if (width >= depth) {
+          ridgeGeo.rotateZ(Math.PI / 2);
+        } else {
+          ridgeGeo.rotateX(Math.PI / 2);
+        }
+        geometries.push(ridgeGeo);
+
+        const ridgeMesh = new THREE.Mesh(ridgeGeo, this.ridgeTileMat);
+        ridgeMesh.position.set(0, roofBaseHeight + 0.4 + roofPitchHeight - 0.05, 0);
+        group.add(ridgeMesh);
+
+        // 4. Front Veranda / Poomukham (പൂമുഖം / വരാന്ത) with Round Classical Pillars
+        // Only if house is sufficiently spacious (> 7m)
+        if (width >= 6.5 && depth >= 6.5) {
+          const verandaWidth = Math.min(width * 0.65, 5.5);
+          const verandaDepth = 2.4;
+          const verandaRoofH = 2.8;
+
+          // Sloped Veranda Awning
+          const verandaRoofGeo = new THREE.BoxGeometry(verandaWidth, 0.16, verandaDepth);
+          geometries.push(verandaRoofGeo);
+          const verandaRoof = new THREE.Mesh(verandaRoofGeo, this.terracottaRoofMat);
+          verandaRoof.position.set(0, verandaRoofH, depth * 0.5 + verandaDepth * 0.45);
+          verandaRoof.rotation.x = 0.22; // sloping canopy
+          group.add(verandaRoof);
+
+          // 2 Round Classical White/Cream Pillars
+          const pillarRadius = 0.12;
+          const pillarH = verandaRoofH - 0.2;
+          const pillarGeo = new THREE.CylinderGeometry(pillarRadius * 0.9, pillarRadius, pillarH, 8);
+          geometries.push(pillarGeo);
+
+          for (const side of [-1, 1]) {
+            const pillar = new THREE.Mesh(pillarGeo, this.pillarMat);
+            const px = side * (verandaWidth * 0.42);
+            const pz = depth * 0.5 + verandaDepth * 0.82;
+            pillar.position.set(px, pillarH * 0.5, pz);
+            group.add(pillar);
+          }
+        }
       }
 
       const groundY = getElevation ? getElevation(centerX, centerZ) : 0;
       group.position.set(centerX, groundY, centerZ);
       return { group, geometries };
     } catch {
-      // Discard on any non-manifold or self-intersecting polygon
       for (const geo of geometries) {
         geo.dispose();
       }
@@ -224,7 +329,10 @@ export class BuildingLODManager {
     this.clear();
     this.scene.remove(this.container);
     this.terracottaRoofMat.dispose();
+    this.ridgeTileMat.dispose();
     this.commercialRoofMat.dispose();
+    this.pillarMat.dispose();
+    this.awningMat.dispose();
     this.groundAoMat.dispose();
   }
 }

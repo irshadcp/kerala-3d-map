@@ -22,8 +22,8 @@
   "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   "light": {
     "anchor": "map",
-    "color": "#fffbeb",
-    "intensity": 0.65,
+    "color": "#fffdf0",
+    "intensity": 0.72,
     "position": [1.5, 210, 45]
   },
   "layers": [
@@ -31,7 +31,7 @@
       "id": "background",
       "type": "background",
       "paint": {
-        "background-color": "#c2e2c9"
+        "background-color": "#bbf7d0"
       }
     },
     {
@@ -39,10 +39,10 @@
       "type": "hillshade",
       "source": "terrainSource",
       "paint": {
-        "hillshade-shadow-color": "#0f3a22",
-        "hillshade-highlight-color": "#fff7ed",
-        "hillshade-accent-color": "#166534",
-        "hillshade-exaggeration": 0.65
+        "hillshade-shadow-color": "#166534",
+        "hillshade-highlight-color": "#fef9c3",
+        "hillshade-accent-color": "#22c55e",
+        "hillshade-exaggeration": 0.62
       }
     },
     {
@@ -61,8 +61,8 @@
       "source-layer": "landcover",
       "filter": ["==", ["get", "class"], "wood"],
       "paint": {
-        "fill-color": "#5b9468",
-        "fill-opacity": 0.9
+        "fill-color": "#16a34a",
+        "fill-opacity": 0.92
       }
     },
     {
@@ -72,7 +72,7 @@
       "source-layer": "landcover",
       "filter": ["match", ["get", "class"], ["farmland", "farm", "orchard"], true, false],
       "paint": {
-        "fill-color": "#a7d7b5",
+        "fill-color": "#bef264",
         "fill-opacity": 0.88
       }
     },
@@ -83,7 +83,7 @@
       "source-layer": "landcover",
       "filter": ["match", ["get", "class"], ["wetland", "marsh", "swamp", "mangrove"], true, false],
       "paint": {
-        "fill-color": "#6ee7b7",
+        "fill-color": "#34d399",
         "fill-opacity": 0.9
       }
     },
@@ -104,7 +104,7 @@
       "source": "openmaptiles",
       "source-layer": "water",
       "paint": {
-        "fill-color": "#38bdf8"
+        "fill-color": "#0ea5e9"
       }
     },
     {
@@ -112,9 +112,13 @@
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "waterway",
+      "layout": {
+        "line-join": "round",
+        "line-cap": "round"
+      },
       "paint": {
         "line-color": "#0284c7",
-        "line-width": 2.5
+        "line-width": 3.0
       }
     },
     {
